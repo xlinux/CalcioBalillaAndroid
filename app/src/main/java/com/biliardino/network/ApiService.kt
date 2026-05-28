@@ -1,6 +1,7 @@
 package com.biliardino.network
 
 import com.biliardino.model.*
+import okhttp3.MultipartBody
 import retrofit2.http.*
 
 interface AuthApi {
@@ -9,6 +10,17 @@ interface AuthApi {
 
     @POST("auth/login")
     suspend fun login(@Body request: LoginRequest): AuthResponse
+}
+
+interface UserSettingsApi {
+    @GET("me")
+    suspend fun getMe(): MeResponse
+
+    @PUT("me/profile")
+    suspend fun updateProfile(@Body request: UpdateProfileRequest): MeResponse
+
+    @PUT("me/password")
+    suspend fun changePassword(@Body request: ChangePasswordRequest)
 }
 
 interface LeagueApi {
@@ -33,8 +45,66 @@ interface LeagueApi {
     @POST("leghe/{leagueId}/stagioni")
     suspend fun createSeason(@Path("leagueId") leagueId: Long, @Body request: CreateSeasonRequest): SeasonResponse
 
-    @POST("leghe/{leagueId}/guest-player")
-    suspend fun createGuestPlayer(@Path("leagueId") leagueId: Long, @Body request: CreateGuestPlayerRequest): LeagueUserResponse
+    @PUT("stagioni/{seasonId}/close")
+    suspend fun closeSeason(@Path("seasonId") seasonId: Long): SeasonResponse
+
+    @PUT("leghe/{leagueId}/close")
+    suspend fun closeLeague(@Path("leagueId") leagueId: Long): LeagueResponse
+
+    @GET("leghe/{leagueId}/membri")
+    suspend fun getLeagueMembers(@Path("leagueId") leagueId: Long): List<LeagueMemberResponse>
+
+    @PUT("leghe/{leagueId}/membri/{userId}/role")
+    suspend fun updateMemberRole(
+        @Path("leagueId") leagueId: Long,
+        @Path("userId") userId: Long,
+        @Body request: UpdateLeagueMemberRoleRequest
+    ): LeagueMemberResponse
+
+    @Multipart
+    @POST("leghe/{leagueId}/cover")
+    suspend fun uploadLeagueCover(
+        @Path("leagueId") leagueId: Long,
+        @Part file: MultipartBody.Part
+    ): LeagueResponse
+
+    @DELETE("leghe/{leagueId}/cover")
+    suspend fun deleteLeagueCover(@Path("leagueId") leagueId: Long): LeagueResponse
+
+    @POST("stagioni/{seasonId}/guest-player")
+    suspend fun createGuestPlayer(@Path("seasonId") seasonId: Long, @Body request: CreateGuestPlayerRequest): LeagueUserResponse
+
+    @GET("stagioni/{seasonId}/competizioni")
+    suspend fun getCompetitions(@Path("seasonId") seasonId: Long): List<CompetitionResponse>
+
+    @POST("stagioni/{seasonId}/competizioni")
+    suspend fun createCompetition(@Path("seasonId") seasonId: Long, @Body request: CreateCompetitionRequest): CompetitionResponse
+}
+
+interface CompetitionApi {
+    @GET("competizioni/{competitionId}/partite")
+    suspend fun getMatches(@Path("competitionId") competitionId: Long): List<MatchResponse>
+
+    @POST("competizioni/{competitionId}/partite")
+    suspend fun createMatch(@Path("competitionId") competitionId: Long, @Body request: CreateDoubleMatchRequest): MatchResponse
+
+    @DELETE("competizioni/{competitionId}/partite/{matchId}")
+    suspend fun deleteMatch(@Path("competitionId") competitionId: Long, @Path("matchId") matchId: Long)
+
+    @GET("competizioni/{competitionId}/classifica-squadre")
+    suspend fun getTeamRankings(@Path("competitionId") competitionId: Long): List<TeamRankingResponse>
+
+    @GET("competizioni/{competitionId}/classifica-giocatori")
+    suspend fun getPlayerRankings(@Path("competitionId") competitionId: Long): List<PlayerRankingResponse>
+
+    @GET("competizioni/{competitionId}/partite/squadre/{teamId}")
+    suspend fun getTeamMatches(@Path("competitionId") competitionId: Long, @Path("teamId") teamId: Long): List<MatchResponse>
+
+    @POST("competizioni/{competitionId}/join")
+    suspend fun joinCompetition(@Path("competitionId") competitionId: Long): CompetitionResponse
+
+    @PUT("competizioni/{competitionId}/close")
+    suspend fun closeCompetition(@Path("competitionId") competitionId: Long): CompetitionResponse
 }
 
 interface MatchApi {
@@ -44,23 +114,8 @@ interface MatchApi {
     @GET("stagioni/{seasonId}/squadre")
     suspend fun getTeams(@Path("seasonId") seasonId: Long): List<TeamResponse>
 
-    @POST("stagioni/{seasonId}/partite")
-    suspend fun createMatch(@Path("seasonId") seasonId: Long, @Body request: CreateDoubleMatchRequest): MatchResponse
-
-    @GET("stagioni/{seasonId}/partite")
-    suspend fun getMatches(@Path("seasonId") seasonId: Long): List<MatchResponse>
-
-    @GET("stagioni/{seasonId}/partite/squadre/{teamId}")
-    suspend fun getTeamMatches(@Path("seasonId") seasonId: Long, @Path("teamId") teamId: Long): List<MatchResponse>
-
     @POST("stagioni/{seasonId}/partite/random")
     suspend fun generateRandomMatches(@Path("seasonId") seasonId: Long, @Body request: GenerateRandomMatchesRequest): List<MatchResponse>
-
-    @GET("stagioni/{seasonId}/classifica-giocatori")
-    suspend fun getPlayerRankings(@Path("seasonId") seasonId: Long): List<PlayerRankingResponse>
-
-    @GET("stagioni/{seasonId}/classifica-squadre")
-    suspend fun getTeamRankings(@Path("seasonId") seasonId: Long): List<TeamRankingResponse>
 
     @GET("stagioni/{seasonId}/squadre/{teamId}/rating-history")
     suspend fun getTeamRatingHistory(@Path("seasonId") seasonId: Long, @Path("teamId") teamId: Long): List<RatingHistoryResponse>

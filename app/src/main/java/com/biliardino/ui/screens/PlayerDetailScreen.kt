@@ -17,7 +17,7 @@ import com.biliardino.viewmodel.AppViewModel
 import com.biliardino.viewmodel.UiState
 
 @Composable
-fun PlayerDetailScreen(league: LeagueResponse, season: SeasonResponse, user: LeagueUserResponse, s: UiState, vm: AppViewModel) {
+fun PlayerDetailScreen(league: LeagueResponse, season: SeasonResponse, competition: CompetitionResponse, user: LeagueUserResponse, s: UiState, vm: AppViewModel) {
     Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         PlayerStatsInfo(s.currentPlayerStats)
         

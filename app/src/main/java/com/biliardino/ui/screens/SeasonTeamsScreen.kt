@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -19,15 +20,38 @@ import com.biliardino.viewmodel.AppViewModel
 import com.biliardino.viewmodel.UiState
 
 @Composable
-fun SeasonTeamsScreen(league: LeagueResponse, season: SeasonResponse, s: UiState, vm: AppViewModel) {
-    CreateTeamView(league, s.seasonUsers, vm) { request ->
-        vm.createTeam(season.id, request)
+fun SeasonTeamsScreen(league: LeagueResponse, season: SeasonResponse, competition: CompetitionResponse?, s: UiState, vm: AppViewModel) {
+    if (season.active == false) {
+        Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "Stagione Conclusa",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Non è più possibile creare squadre o aggiungere giocatori guest per questa stagione.",
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        }
+    } else {
+        CreateTeamView(league, season, s.seasonUsers, vm) { request ->
+            vm.createTeam(season.id, request)
+        }
     }
 }
 
 @Composable
 fun CreateTeamView(
     league: LeagueResponse,
+    season: SeasonResponse,
     users: List<LeagueUserResponse>,
     vm: AppViewModel,
     onConfirm: (CreateTeamRequest) -> Unit
@@ -120,7 +144,7 @@ fun CreateTeamView(
         CreateGuestPlayerDialog(
             onDismiss = { showGuestDialog = false },
             onConfirm = { username ->
-                vm.createGuestPlayer(league.id, username) { newUser ->
+                vm.createGuestPlayer(season.id, username) { newUser ->
                     if (targetPlayerSlot == 1) playerA = newUser
                     if (targetPlayerSlot == 2) playerB = newUser
                     showGuestDialog = false

@@ -21,9 +21,9 @@ import com.biliardino.viewmodel.AppViewModel
 import com.biliardino.viewmodel.UiState
 
 @Composable
-fun TeamDetailScreen(league: LeagueResponse, season: SeasonResponse, team: TeamResponse, s: UiState, vm: AppViewModel) {
+fun TeamDetailScreen(league: LeagueResponse, season: SeasonResponse, competition: CompetitionResponse, team: TeamResponse, s: UiState, vm: AppViewModel) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Statistiche", "Compare")
+    val tabs = listOf("Statistiche", "Partite", "Compare")
 
     Column(Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = selectedTab) {
@@ -41,7 +41,8 @@ fun TeamDetailScreen(league: LeagueResponse, season: SeasonResponse, team: TeamR
                         RatingLineChart(s.currentTeamRatingHistory, Modifier.fillMaxWidth().height(200.dp))
                     }
                 }
-                1 -> TeamCompareView(season, team, s.seasonTeams, s.currentTeamHeadToHead, vm)
+                1 -> MatchList(s.currentTeamMatches, s.seasonTeams)
+                2 -> TeamCompareView(competition, team, s.seasonTeams, s.currentTeamHeadToHead, vm)
             }
         }
     }
@@ -119,7 +120,7 @@ fun RatingLineChart(history: List<RatingHistoryResponse>, modifier: Modifier = M
 }
 
 @Composable
-fun TeamCompareView(season: SeasonResponse, teamA: TeamResponse, allTeams: List<TeamResponse>, h2h: HeadToHeadResponse?, vm: AppViewModel) {
+fun TeamCompareView(competition: CompetitionResponse, teamA: TeamResponse, allTeams: List<TeamResponse>, h2h: HeadToHeadResponse?, vm: AppViewModel) {
     var expanded by remember { mutableStateOf(false) }
     var selectedTeamB by remember { mutableStateOf<TeamResponse?>(null) }
 
@@ -137,7 +138,7 @@ fun TeamCompareView(season: SeasonResponse, teamA: TeamResponse, allTeams: List<
                         onClick = {
                             selectedTeamB = team
                             expanded = false
-                            vm.loadHeadToHead(season.id, teamA.id, team.id)
+                            vm.loadHeadToHead(competition.id, teamA.id, team.id)
                         }
                     )
                 }

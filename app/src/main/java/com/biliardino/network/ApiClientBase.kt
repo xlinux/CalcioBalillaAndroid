@@ -10,7 +10,9 @@ import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFact
 import okhttp3.MediaType.Companion.toMediaType
 
 object ApiClientBase {
-    private const val BASE_URL = "http://192.168.1.38:8080"
+ //   private const val BASE_URL = "https://calciobalillabackend.onrender.com/"
+  private const val BASE_URL = "http://192.168.1.31:8080/"
+
 
     var authToken: String? = null
 
@@ -44,6 +46,8 @@ object ApiClientBase {
     inline fun <reified T> service(): T = retrofit.create()
 
     val auth: AuthApi by lazy { service() }
+    val userSettings: UserSettingsApi by lazy { service() }
     val leagues: LeagueApi by lazy { service() }
+    val competitions: CompetitionApi by lazy { service() }
     val matches: MatchApi by lazy { service() }
 }

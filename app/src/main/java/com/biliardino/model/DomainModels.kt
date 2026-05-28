@@ -25,6 +25,25 @@ data class AuthResponse(
     val email: String? = null
 )
 
+@Serializable
+data class MeResponse(
+    val id: Long,
+    val username: String? = null,
+    val email: String
+)
+
+@Serializable
+data class UpdateProfileRequest(
+    val username: String,
+    val avatar: String? = null
+)
+
+@Serializable
+data class ChangePasswordRequest(
+    val oldPassword: String,
+    val newPassword: String
+)
+
 // --- Leghe ---
 
 @Serializable
@@ -33,19 +52,33 @@ data class LeagueResponse( // Renamed from League to match Swagger
     val name: String,
     val description: String,
     val inviteCode: String? = null,
-    val imageUrl: String? = null
+    val coverImageUrl: String? = null,
+    val status: String? = null
 )
 
 @Serializable
 data class CreateLeagueRequest(
     val name: String,
-    val description: String,
-    val imageUrl: String? = null
+    val description: String
 )
 
 @Serializable
 data class JoinLeagueRequest(
     val inviteCode: String
+)
+
+@Serializable
+data class LeagueMemberResponse(
+    val userId: Long,
+    val username: String,
+    val email: String? = null,
+    val avatar: String? = null,
+    val role: String
+)
+
+@Serializable
+data class UpdateLeagueMemberRoleRequest(
+    val role: String
 )
 
 @Serializable
@@ -63,7 +96,8 @@ data class LeagueUserResponse( // Renamed from UserResponse
     val goalsAgainst: Int,
     val matchesPlayed: Int,
     val cappottiGiven: Int,
-    val cappottiReceived: Int
+    val cappottiReceived: Int,
+    val role: String? = null
 )
 
 // --- Stagioni ---
@@ -84,6 +118,16 @@ data class SeasonResponse( // Renamed from Season
 )
 
 @Serializable
+data class CompetitionResponse(
+    val id: Long,
+    val seasonId: Long,
+    val name: String,
+    val type: String? = null,
+    val status: String? = null,
+    val currentUserJoined: Boolean = false
+)
+
+@Serializable
 data class CreateSeasonRequest(
     val name: String,
     val startDate: String,
@@ -92,7 +136,16 @@ data class CreateSeasonRequest(
     val cappottoEnabled: Boolean,
     val cappottoBonus: Int,
     val allowJoinAfterStart: Boolean,
-    val allowMatchesAfterEnd: Boolean
+    val allowMatchesAfterEnd: Boolean,
+    val copyPlayersFromPreviousSeason: Boolean = false,
+    val copyTeamsFromPreviousSeason: Boolean = false,
+    val createChampionship: Boolean = false
+)
+
+@Serializable
+data class CreateCompetitionRequest(
+    val name: String,
+    val type: String
 )
 
 // --- Squadre ---

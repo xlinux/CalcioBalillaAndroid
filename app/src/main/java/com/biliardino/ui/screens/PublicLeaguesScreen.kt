@@ -22,13 +22,42 @@ import com.biliardino.viewmodel.UiState
 @Composable
 fun PublicLeaguesScreen(s: UiState, vm: AppViewModel) {
     Column(Modifier.fillMaxSize()) {
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(s.publicLeagues) { league ->
-                LeagueCard(league = league, onCLick = null)
+        if (s.publicLeagues.isEmpty() && !s.loading) {
+            Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(
+                        Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "Nessuna Lega Disponibile",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Al momento non ci sono leghe pubbliche a cui puoi dare un'occhiata.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+            }
+        } else {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(s.publicLeagues) { league ->
+                    LeagueCard(
+                        league = league,
+                        onCLick = null // Disabilitato per utenti non registrati
+                    )
+                }
             }
         }
     }
@@ -49,11 +78,30 @@ fun LeagueCard(
         shape = MaterialTheme.shapes.medium
     ) {
         Column(Modifier.padding(16.dp)) {
-            Text(
-                text = league.name,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = league.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                
+                val statusText = if (league.status == "ACTIVE" || league.status == null) "ATTIVA" else "CHIUSA"
+                val statusColor = if (statusText == "ATTIVA") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                val onStatusColor = if (statusText == "ATTIVA") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+
+                Surface(
+                    color = statusColor,
+                    shape = MaterialTheme.shapes.extraSmall
+                ) {
+                    Text(
+                        text = statusText,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = onStatusColor
+                    )
+                }
+            }
             Spacer(Modifier.height(4.dp))
             Text(
                 text = league.description,

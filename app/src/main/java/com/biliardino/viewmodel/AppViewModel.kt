@@ -1,6 +1,7 @@
 package com.biliardino.viewmodel
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.biliardino.model.*
@@ -8,6 +9,10 @@ import com.biliardino.network.ApiClientBase
 import com.biliardino.network.SessionManager
 import com.biliardino.ui.Screen
 import android.util.Log
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,7 +21,11 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.HttpException
+import java.io.InputStream
 
 data class UiState(
     val currentUser: AuthResponse? = null,
@@ -26,17 +35,28 @@ data class UiState(
     val currentLeague: LeagueResponse? = null,
     val seasons: List<SeasonResponse> = emptyList(),
     val currentSeason: SeasonResponse? = null,
+    val competitions: List<CompetitionResponse> = emptyList(),
+    val currentCompetition: CompetitionResponse? = null,
     val playerRankings: List<PlayerRankingResponse> = emptyList(),
     val teamRankings: List<TeamRankingResponse> = emptyList(),
     val seasonMatches: List<MatchResponse> = emptyList(),
     val seasonTeams: List<TeamResponse> = emptyList(),
     val seasonUsers: List<LeagueUserResponse> = emptyList(),
+    val leagueMembers: List<LeagueMemberResponse> = emptyList(),
     val currentTeamStats: TeamStatsResponse? = null,
     val currentTeamRatingHistory: List<RatingHistoryResponse> = emptyList(),
+    val currentTeamMatches: List<MatchResponse> = emptyList(),
     val currentTeamHeadToHead: HeadToHeadResponse? = null,
     val currentPlayerStats: PlayerStatsResponse? = null,
     val currentPlayerRatingHistory: List<RatingHistoryResponse> = emptyList(),
     val currentPlayerPartners: List<PlayerPartnerStatsResponse> = emptyList(),
+    val currentPlayerMatches: List<MatchResponse> = emptyList(),
+    val currentUserRoleInLeague: String? = null,
+    
+    // Create League fields
+    val newLeagueName: String = "",
+    val newLeagueDescription: String = "",
+    val inviteCode: String = "",
     
     // Auth fields
     val email: String = "",
@@ -45,7 +65,11 @@ data class UiState(
     
     val loading: Boolean = false,
     val error: String? = null,
-    val successMessage: String? = null
+    val successMessage: String? = null,
+    val canUseBiometrics: Boolean = false,
+    val isBiometricEnabled: Boolean = false,
+    val showBiometricSetupPrompt: Boolean = false,
+    val theme: String = "SYSTEM" // "LIGHT", "DARK", "SYSTEM"
 )
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -54,6 +78,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionManager = SessionManager(application)
 
     init {
+        checkBiometricAvailability()
+        viewModelScope.launch {
+            sessionManager.isBiometricEnabled.collect { enabled ->
+                _state.value = _state.value.copy(isBiometricEnabled = enabled)
+            }
+        }
+        viewModelScope.launch {
+            sessionManager.themePreference.collect { theme ->
+                _state.value = _state.value.copy(theme = theme)
+            }
+        }
         viewModelScope.launch {
             kotlinx.coroutines.delay(2000)
             checkSession()
@@ -65,7 +100,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val token = sessionManager.authToken.first()
         if (token != null) {
             ApiClientBase.authToken = token
-            // Optionally fetch user info here if needed
+            loadCurrentUser()
             _state.value = _state.value.copy(currentScreen = Screen.MyLeagues)
             loadMyLeagues()
         } else {
@@ -73,9 +108,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun checkBiometricAvailability() {
+        val biometricManager = BiometricManager.from(getApplication())
+        val canAuthenticate = biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+        _state.value = _state.value.copy(
+            canUseBiometrics = canAuthenticate == BiometricManager.BIOMETRIC_SUCCESS
+        )
+    }
+
     fun onEmailChange(v: String) { _state.value = _state.value.copy(email = v) }
     fun onPasswordChange(v: String) { _state.value = _state.value.copy(password = v) }
     fun onUsernameChange(v: String) { _state.value = _state.value.copy(username = v) }
+
+    fun onNewLeagueNameChange(v: String) { _state.value = _state.value.copy(newLeagueName = v) }
+    fun onNewLeagueDescriptionChange(v: String) { _state.value = _state.value.copy(newLeagueDescription = v) }
+    fun onInviteCodeChange(v: String) { _state.value = _state.value.copy(inviteCode = v) }
 
     fun navigateTo(screen: Screen) {
         _state.value = _state.value.copy(currentScreen = screen, error = null, successMessage = null)
@@ -93,11 +140,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }.onSuccess { auth ->
             ApiClientBase.authToken = auth.token
             auth.token?.let { sessionManager.saveToken(it) }
+            sessionManager.saveCredentials(s.email, s.password)
+            
+            // Fetch complete user info after login
+            loadCurrentUser()
+
+            val showBioPrompt = s.canUseBiometrics && !s.isBiometricEnabled
+
             _state.value = _state.value.copy(
                 currentUser = auth,
                 loading = false,
                 currentScreen = Screen.MyLeagues,
-                successMessage = "Login effettuato con successo!"
+                successMessage = "Login effettuato con successo!",
+                showBiometricSetupPrompt = showBioPrompt
             )
             loadMyLeagues()
         }.onFailure { e ->
@@ -113,16 +168,37 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }.onSuccess { auth ->
             ApiClientBase.authToken = auth.token
             auth.token?.let { sessionManager.saveToken(it) }
+            sessionManager.saveCredentials(s.email, s.password)
+
+            val showBioPrompt = s.canUseBiometrics && !s.isBiometricEnabled
+
             _state.value = _state.value.copy(
                 currentUser = auth,
                 loading = false,
                 currentScreen = Screen.MyLeagues,
-                successMessage = "Registrazione completata!"
+                successMessage = "Registrazione completata!",
+                showBiometricSetupPrompt = showBioPrompt
             )
             loadMyLeagues()
         }.onFailure { e ->
             _state.value = _state.value.copy(loading = false, error = "Registrazione fallita: ${e.getErrorMessage()}")
         }
+    }
+
+    fun enableBiometric(enable: Boolean) = viewModelScope.launch {
+        sessionManager.setBiometricEnabled(enable)
+        _state.value = _state.value.copy(showBiometricSetupPrompt = false)
+        if (enable) {
+            _state.value = _state.value.copy(successMessage = "Touch ID attivato!")
+        }
+    }
+
+    fun setTheme(theme: String) = viewModelScope.launch {
+        sessionManager.setThemePreference(theme)
+    }
+
+    fun dismissBiometricPrompt() {
+        _state.value = _state.value.copy(showBiometricSetupPrompt = false)
     }
 
     fun loadPublicLeagues() = viewModelScope.launch {
@@ -131,8 +207,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             .onSuccess { 
                 _state.value = _state.value.copy(
                     publicLeagues = it, 
-                    loading = false,
-                    successMessage = "Leghe pubbliche caricate"
+                    loading = false
                 ) 
             }
             .onFailure { _state.value = _state.value.copy(loading = false, error = it.getErrorMessage()) }
@@ -144,86 +219,145 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             .onSuccess { 
                 _state.value = _state.value.copy(
                     myLeagues = it, 
-                    loading = false,
-                    successMessage = "Le tue leghe caricate"
+                    loading = false
                 ) 
             }
             .onFailure { _state.value = _state.value.copy(loading = false, error = it.getErrorMessage()) }
     }
 
     fun selectLeague(league: LeagueResponse) = viewModelScope.launch {
-        _state.value = _state.value.copy(currentLeague = league, loading = true, error = null, successMessage = null)
-        runCatching { ApiClientBase.leagues.getSeasons(league.id) }
-            .onSuccess { 
-                _state.value = _state.value.copy(
-                    seasons = it, 
-                    loading = false,
-                    currentScreen = Screen.LeagueSeasons(league),
-                    successMessage = "Stagioni caricate"
-                ) 
-            }
-            .onFailure { _state.value = _state.value.copy(loading = false, error = it.getErrorMessage()) }
+        _state.value = _state.value.copy(currentLeague = league, loading = true, error = null, successMessage = null, currentUserRoleInLeague = null)
+        runCatching {
+            val seasons = ApiClientBase.leagues.getSeasons(league.id)
+            val users = ApiClientBase.leagues.getLeagueUsers(league.id)
+            val members = ApiClientBase.leagues.getLeagueMembers(league.id)
+            Triple(seasons, users, members)
+        }.onSuccess { (seasons, users, members) ->
+            val myUserId = _state.value.currentUser?.userId
+            val myRole = members.find { it.userId == myUserId }?.role
+            
+            _state.value = _state.value.copy(
+                seasons = seasons,
+                seasonUsers = users,
+                leagueMembers = members,
+                currentUserRoleInLeague = myRole,
+                loading = false,
+                currentScreen = Screen.LeagueSeasons(league)
+            ) 
+        }
+        .onFailure { _state.value = _state.value.copy(loading = false, error = it.getErrorMessage()) }
     }
 
-    fun selectSeason(league: LeagueResponse, season: SeasonResponse) {
+    fun selectSeason(league: LeagueResponse, season: SeasonResponse) = viewModelScope.launch {
         _state.value = _state.value.copy(
             currentSeason = season,
-            currentScreen = Screen.SeasonStatistics(league, season)
+            loading = true,
+            error = null
         )
-        loadRankings(season.id)
-        loadSeasonStatsData(league.id, season.id)
+        runCatching { ApiClientBase.leagues.getCompetitions(season.id) }
+            .onSuccess { competitions ->
+                _state.value = _state.value.copy(
+                    competitions = competitions,
+                    loading = false,
+                    currentScreen = Screen.SeasonCompetitions(league, season)
+                )
+                loadSeasonStatsData(league.id, season.id)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore competizioni: ${e.getErrorMessage()}")
+            }
     }
 
-    fun loadRankings(seasonId: Long) = viewModelScope.launch {
-        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+    fun selectCompetition(league: LeagueResponse, season: SeasonResponse, competition: CompetitionResponse) {
+        _state.value = _state.value.copy(
+            currentCompetition = competition,
+            currentScreen = Screen.CompetitionStatistics(league, season, competition)
+        )
+        loadRankings(competition.id)
+        loadCompetitionMatches(competition.id)
+    }
+
+    fun loadRankings(competitionId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
         runCatching {
-            val players = ApiClientBase.matches.getPlayerRankings(seasonId)
-            val teams = ApiClientBase.matches.getTeamRankings(seasonId)
+            val players = ApiClientBase.competitions.getPlayerRankings(competitionId)
+            val teams = ApiClientBase.competitions.getTeamRankings(competitionId)
             players to teams
         }.onSuccess { (players, teams) ->
             _state.value = _state.value.copy(
                 playerRankings = players,
                 teamRankings = teams,
-                loading = false,
-                successMessage = "Classifiche aggiornate"
+                loading = false
             )
         }.onFailure { e ->
             _state.value = _state.value.copy(loading = false, error = "Errore classifiche: ${e.getErrorMessage()}")
         }
     }
 
-    fun loadSeasonStatsData(leagueId: Long, seasonId: Long) = viewModelScope.launch {
+    fun loadCompetitionMatches(competitionId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching { ApiClientBase.competitions.getMatches(competitionId) }
+            .onSuccess { matches ->
+                _state.value = _state.value.copy(
+                    seasonMatches = matches,
+                    loading = false
+                )
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore partite: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun joinCompetition(league: LeagueResponse, season: SeasonResponse, competitionId: Long) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.competitions.joinCompetition(competitionId) }
+            .onSuccess {
+                _state.value = _state.value.copy(
+                    successMessage = "Iscrizione completata con successo!",
+                    loading = false
+                )
+                // Refresh competitions list to update joined status
+                selectSeason(league, season)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore durante l'iscrizione: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun loadSeasonStatsData(leagueId: Long, seasonId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
         runCatching {
-            val matches = ApiClientBase.matches.getMatches(seasonId)
             val teams = ApiClientBase.matches.getTeams(seasonId)
             val users = ApiClientBase.leagues.getLeagueUsers(leagueId)
-            Triple(matches, teams, users)
-        }.onSuccess { (matches, teams, users) ->
+            teams to users
+        }.onSuccess { (teams, users) ->
+            val myUserId = _state.value.currentUser?.userId
+            val myRole = users.find { it.userId == myUserId }?.role
+            
             _state.value = _state.value.copy(
-                seasonMatches = matches,
                 seasonTeams = teams,
                 seasonUsers = users,
-                loading = false,
-                successMessage = "Dati stagione aggiornati"
+                currentUserRoleInLeague = myRole,
+                loading = false
             )
         }.onFailure { e ->
             _state.value = _state.value.copy(loading = false, error = "Errore dati: ${e.getErrorMessage()}")
         }
     }
 
-    fun loadTeamDetailData(seasonId: Long, teamId: Long) = viewModelScope.launch {
+    fun loadTeamDetailData(seasonId: Long, competitionId: Long, teamId: Long) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching {
             val stats = ApiClientBase.matches.getTeamStats(seasonId, teamId)
             val history = ApiClientBase.matches.getTeamRatingHistory(seasonId, teamId)
-            stats to history
-        }.onSuccess { (stats, history) ->
+            val teamMatches = ApiClientBase.competitions.getTeamMatches(competitionId, teamId)
+            Triple(stats, history, teamMatches)
+        }.onSuccess { (stats, history, teamMatches) ->
             _state.value = _state.value.copy(
                 currentTeamStats = stats,
                 currentTeamRatingHistory = history,
-                loading = false,
-                successMessage = "Dettagli squadra caricati"
+                currentTeamMatches = teamMatches,
+                loading = false
             )
         }.onFailure { e ->
             _state.value = _state.value.copy(loading = false, error = "Errore squadra: ${e.getErrorMessage()}")
@@ -233,24 +367,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun loadHeadToHead(seasonId: Long, teamAId: Long, teamBId: Long) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.matches.headToHead(seasonId, teamAId, teamBId) }
-            .onSuccess { _state.value = _state.value.copy(currentTeamHeadToHead = it, loading = false, successMessage = "Confronto caricato") }
+            .onSuccess { _state.value = _state.value.copy(currentTeamHeadToHead = it, loading = false) }
             .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore confronto: ${e.getErrorMessage()}") }
     }
 
-    fun loadPlayerDetailData(seasonId: Long, userId: Long) = viewModelScope.launch {
+    fun loadPlayerDetailData(seasonId: Long, competitionId: Long, userId: Long) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching {
             val stats = ApiClientBase.matches.getPlayerStats(seasonId, userId)
             val history = ApiClientBase.matches.getPlayerRatingHistory(seasonId, userId)
             val partners = ApiClientBase.matches.getPlayerPartners(seasonId, userId)
+            // Note: If there's a getPlayerMatches(competitionId, userId) in the future, it should be called here.
             Triple(stats, history, partners)
         }.onSuccess { (stats, history, partners) ->
             _state.value = _state.value.copy(
                 currentPlayerStats = stats,
                 currentPlayerRatingHistory = history,
                 currentPlayerPartners = partners,
-                loading = false,
-                successMessage = "Dettagli giocatore caricati"
+                loading = false
             )
         }.onFailure { e ->
             _state.value = _state.value.copy(loading = false, error = "Errore giocatore: ${e.getErrorMessage()}")
@@ -270,9 +404,86 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
     }
 
-    fun createGuestPlayer(leagueId: Long, username: String, onCreated: (LeagueUserResponse) -> Unit) = viewModelScope.launch {
+    fun createCompetition(league: LeagueResponse, season: SeasonResponse, request: CreateCompetitionRequest) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
-        runCatching { ApiClientBase.leagues.createGuestPlayer(leagueId, CreateGuestPlayerRequest(username)) }
+        runCatching { ApiClientBase.leagues.createCompetition(season.id, request) }
+            .onSuccess {
+                _state.value = _state.value.copy(successMessage = "Competizione creata!")
+                selectSeason(league, season)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore competizione: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun closeSeason(league: LeagueResponse, season: SeasonResponse) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.leagues.closeSeason(season.id) }
+            .onSuccess { updatedSeason ->
+                _state.value = _state.value.copy(
+                    successMessage = "Stagione chiusa con successo!",
+                    loading = false,
+                    currentSeason = updatedSeason
+                )
+                // Refresh list
+                selectLeague(league)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore chiusura: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun closeCompetition(league: LeagueResponse, season: SeasonResponse, competition: CompetitionResponse) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.competitions.closeCompetition(competition.id) }
+            .onSuccess { updatedCompetition ->
+                _state.value = _state.value.copy(
+                    successMessage = "Competizione chiusa con successo!",
+                    loading = false,
+                    currentCompetition = updatedCompetition
+                )
+                // Refresh list to show updated status
+                selectSeason(league, season)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore chiusura competizione: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun closeLeague(leagueId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.leagues.closeLeague(leagueId) }
+            .onSuccess {
+                _state.value = _state.value.copy(
+                    successMessage = "Lega chiusa con successo!",
+                    loading = false,
+                    currentScreen = Screen.MyLeagues
+                )
+                loadMyLeagues()
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore chiusura lega: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun updateMemberRole(leagueId: Long, userId: Long, role: String) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.leagues.updateMemberRole(leagueId, userId, UpdateLeagueMemberRoleRequest(role)) }
+            .onSuccess {
+                _state.value = _state.value.copy(
+                    successMessage = "Ruolo aggiornato con successo!",
+                    loading = false
+                )
+                _state.value.currentLeague?.let { selectLeague(it) }
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore aggiornamento ruolo: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun createGuestPlayer(seasonId: Long, username: String, onCreated: (LeagueUserResponse) -> Unit) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.leagues.createGuestPlayer(seasonId, CreateGuestPlayerRequest(username)) }
             .onSuccess { user ->
                 _state.value = _state.value.copy(
                     successMessage = "Giocatore Guest creato!",
@@ -291,12 +502,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
     }
 
-    fun createMatch(seasonId: Long, request: CreateDoubleMatchRequest) = viewModelScope.launch {
+    fun createMatch(competitionId: Long, request: CreateDoubleMatchRequest) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
-        runCatching { ApiClientBase.matches.createMatch(seasonId, request) }
+        runCatching { ApiClientBase.competitions.createMatch(competitionId, request) }
             .onSuccess { 
                 _state.value = _state.value.copy(successMessage = "Partita registrata!")
-                loadSeasonStatsData(_state.value.currentLeague!!.id, seasonId)
+                loadCompetitionMatches(competitionId)
+                loadRankings(competitionId)
             }
             .onFailure { e ->
                 _state.value = _state.value.copy(loading = false, error = "Errore partita: ${e.getErrorMessage()}")
@@ -315,17 +527,197 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
     }
 
+    fun createLeague() = viewModelScope.launch {
+        val s = _state.value
+        if (s.newLeagueName.isBlank()) {
+            _state.value = s.copy(error = "Il nome della lega è obbligatorio")
+            return@launch
+        }
+        _state.value = s.copy(loading = true, error = null, successMessage = null)
+        runCatching { 
+            ApiClientBase.leagues.createLeague(CreateLeagueRequest(s.newLeagueName, s.newLeagueDescription))
+        }.onSuccess { league -> 
+            _state.value = _state.value.copy(
+                loading = false,
+                successMessage = "Lega creata con successo!",
+                newLeagueName = "",
+                newLeagueDescription = ""
+            )
+            selectLeague(league)
+            loadMyLeagues()
+        }.onFailure { e ->
+            _state.value = _state.value.copy(loading = false, error = "Errore creazione lega: ${e.getErrorMessage()}")
+        }
+    }
+
+    fun uploadLeagueCover(leagueId: Long, uri: Uri) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching {
+            val inputStream: InputStream? = getApplication<Application>().contentResolver.openInputStream(uri)
+            val bytes = inputStream?.readBytes() ?: throw Exception("Impossibile leggere il file")
+            val requestFile = bytes.toRequestBody("image/*".toMediaTypeOrNull())
+            val body = MultipartBody.Part.createFormData("file", "cover.jpg", requestFile)
+            
+            ApiClientBase.leagues.uploadLeagueCover(leagueId, body)
+        }.onSuccess { league ->
+            _state.value = _state.value.copy(
+                loading = false,
+                successMessage = "Immagine caricata con successo!",
+                currentLeague = league
+            )
+            // Se necessario ricarichiamo le altre liste
+            loadMyLeagues()
+        }.onFailure { e ->
+            _state.value = _state.value.copy(loading = false, error = "Errore caricamento immagine: ${e.getErrorMessage()}")
+        }
+    }
+
+    fun deleteLeagueCover(leagueId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.leagues.deleteLeagueCover(leagueId) }
+            .onSuccess { league ->
+                _state.value = _state.value.copy(
+                    loading = false,
+                    successMessage = "Immagine rimossa!",
+                    currentLeague = league
+                )
+                loadMyLeagues()
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore rimozione immagine: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun joinLeague(code: String? = null) = viewModelScope.launch {
+        val s = _state.value
+        val finalCode = code ?: s.inviteCode
+        if (finalCode.isBlank()) {
+            _state.value = s.copy(error = "Il codice di invito è obbligatorio")
+            return@launch
+        }
+        _state.value = s.copy(loading = true, error = null, successMessage = null)
+        runCatching {
+            ApiClientBase.leagues.joinLeague(JoinLeagueRequest(finalCode))
+        }.onSuccess { league ->
+            _state.value = _state.value.copy(
+                loading = false,
+                successMessage = "Ti sei unito alla lega!",
+                inviteCode = ""
+            )
+            selectLeague(league)
+            loadMyLeagues()
+        }.onFailure { e ->
+            _state.value = _state.value.copy(loading = false, error = "Errore durante l'accesso alla lega: ${e.getErrorMessage()}")
+        }
+    }
+
+    fun loadCurrentUser() = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching { ApiClientBase.userSettings.getMe() }
+            .onSuccess { me ->
+                val currentAuth = _state.value.currentUser
+                _state.value = _state.value.copy(
+                    currentUser = AuthResponse(
+                        token = currentAuth?.token,
+                        userId = me.id,
+                        name = me.username ?: "Utente",
+                        email = me.email
+                    ),
+                    loading = false
+                )
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Impossibile caricare il profilo")
+                Log.e("AppViewModel", "Failed to load current user", e)
+            }
+    }
+
+    fun updateProfile(name: String) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.userSettings.updateProfile(UpdateProfileRequest(username = name)) }
+            .onSuccess { me ->
+                val currentAuth = _state.value.currentUser
+                _state.value = _state.value.copy(
+                    currentUser = AuthResponse(
+                        token = currentAuth?.token,
+                        userId = me.id,
+                        name = me.username ?: "Utente",
+                        email = me.email
+                    ),
+                    loading = false,
+                    successMessage = "Profilo aggiornato con successo!"
+                )
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore aggiornamento profilo: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun changePassword(old: String, new: String) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.userSettings.changePassword(ChangePasswordRequest(old, new)) }
+            .onSuccess {
+                _state.value = _state.value.copy(
+                    loading = false,
+                    successMessage = "Password cambiata con successo!"
+                )
+                // Se la password è cambiata, aggiorniamo le credenziali per il biometrico
+                val currentEmail = _state.value.email
+                if (currentEmail.isNotBlank()) {
+                    sessionManager.saveCredentials(currentEmail, new)
+                }
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore cambio password: ${e.getErrorMessage()}")
+            }
+    }
+
     fun logout() {
+        val canBio = _state.value.canUseBiometrics
+        val bioEnabled = _state.value.isBiometricEnabled
         viewModelScope.launch { sessionManager.clearSession() }
         ApiClientBase.authToken = null
-        _state.value = UiState()
+        _state.value = UiState(currentScreen = Screen.PublicLeagues).copy(
+            canUseBiometrics = canBio,
+            isBiometricEnabled = bioEnabled
+        )
         loadPublicLeagues()
     }
 
+    fun showBiometricPrompt(activity: FragmentActivity) {
+        val executor = ContextCompat.getMainExecutor(activity)
+        val biometricPrompt = BiometricPrompt(activity, executor, object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                super.onAuthenticationSucceeded(result)
+                val (email, password) = sessionManager.getCredentials()
+                if (email != null && password != null) {
+                    _state.value = _state.value.copy(email = email, password = password)
+                    login()
+                } else {
+                    _state.value = _state.value.copy(error = "Nessuna credenziale salvata. Effettua il primo login manualmente.")
+                }
+            }
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                super.onAuthenticationError(errorCode, errString)
+                _state.value = _state.value.copy(error = errString.toString())
+            }
+        })
+
+        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Login Biometrico")
+            .setSubtitle("Usa l'impronta digitale o il volto per accedere")
+            .setNegativeButtonText("Annulla")
+            .build()
+
+        biometricPrompt.authenticate(promptInfo)
+    }
+
     private fun Throwable.getErrorMessage(): String {
+        Log.e("AppViewModel", "getErrorMessage triggered for: ${this.javaClass.simpleName}", this)
         val errorMsg = if (this is HttpException) {
             try {
                 val errorBody = response()?.errorBody()?.string()
+                Log.d("AppViewModel", "HTTP Error Body: $errorBody")
                 if (!errorBody.isNullOrBlank()) {
                     val trimmedBody = errorBody.trim()
                     if (trimmedBody.startsWith("{")) {
@@ -350,12 +742,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             message ?: "Errore sconosciuto"
         }
 
-        if (this is HttpException && code() >= 500) {
-            Log.e("AppViewModel", "Errore Server (${code()}): $errorMsg", this)
-        } else {
-            Log.w("AppViewModel", "Errore intercettato: $errorMsg")
-        }
-        
+        Log.w("AppViewModel", "Final error message to display: $errorMsg")
         return errorMsg
     }
 }

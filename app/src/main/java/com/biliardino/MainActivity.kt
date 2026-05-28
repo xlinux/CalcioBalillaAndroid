@@ -4,18 +4,30 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.Surface
+import androidx.fragment.app.FragmentActivity
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.biliardino.ui.ContentScreen
 import com.biliardino.ui.theme.BiliardinoTheme
 import com.biliardino.viewmodel.AppViewModel
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            BiliardinoTheme {
+            val vm: AppViewModel = viewModel()
+            val state by vm.state.collectAsState()
+            
+            val isDarkTheme = when(state.theme) {
+                "LIGHT" -> false
+                "DARK" -> true
+                else -> isSystemInDarkTheme()
+            }
+
+            BiliardinoTheme(darkTheme = isDarkTheme) {
                 Surface {
-                    val vm: AppViewModel = viewModel()
                     ContentScreen(vm)
                 }
             }
