@@ -118,6 +118,7 @@ fun SeasonCompetitionsScreen(
 
     if (showCreateDialog) {
         CreateCompetitionDialog(
+            competitions = s.competitions,
             onDismiss = { showCreateDialog = false },
             onConfirm = { request ->
                 vm.createCompetition(league, season, request)
@@ -152,16 +153,36 @@ fun SeasonCompetitionsScreen(
 }
 
 @Composable
-fun CreateCompetitionDialog(onDismiss: () -> Unit, onConfirm: (CreateCompetitionRequest) -> Unit) {
+fun CreateCompetitionDialog(
+    competitions: List<CompetitionResponse>,
+    onDismiss: () -> Unit,
+    onConfirm: (CreateCompetitionRequest) -> Unit
+) {
     var name by remember { mutableStateOf("") }
     val types = listOf("LEAGUE", "CUP")
     var selectedType by remember { mutableStateOf(types[0]) }
+    val rankingModes = listOf(
+        Triple("PLAYER", "Classifica giocatori", "Mostra solo la classifica dei giocatori"),
+        Triple("TEAM", "Classifica squadre", "Mostra solo la classifica delle squadre"),
+        Triple("BOTH", "Entrambe", "Mostra entrambe le classifiche")
+    )
+    var selectedRankingMode by remember { mutableStateOf("BOTH") }
+
+    var copyParticipants by remember { mutableStateOf(false) }
+    var copyTeams by remember { mutableStateOf(false) }
+    var sourceCompetitionId by remember { mutableStateOf<Long?>(null) }
+    var dropdownExpanded by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Nuova Competizione", fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -181,7 +202,7 @@ fun CreateCompetitionDialog(onDismiss: () -> Unit, onConfirm: (CreateCompetition
                             shape = MaterialTheme.shapes.medium,
                             color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
                             border = androidx.compose.foundation.BorderStroke(
-                                1.dp, 
+                                1.dp,
                                 if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
                             )
                         ) {
@@ -207,12 +228,119 @@ fun CreateCompetitionDialog(onDismiss: () -> Unit, onConfirm: (CreateCompetition
                         }
                     }
                 }
+
+                Column {
+                    Text("Classifiche", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.height(8.dp))
+                    rankingModes.forEach { (mode, title, description) ->
+                        val isSelected = selectedRankingMode == mode
+                        Surface(
+                            onClick = { selectedRankingMode = mode },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            shape = MaterialTheme.shapes.medium,
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                            )
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(12.dp)
+                            ) {
+                                RadioButton(selected = isSelected, onClick = null)
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = title,
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    Text(
+                                        text = description,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider()
+
+                Column {
+                    Text("Copia Dati (Opzionale)", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = copyParticipants,
+                            onCheckedChange = {
+                                copyParticipants = it
+                                if (!it) copyTeams = false
+                            }
+                        )
+                        Text("Copia partecipanti", style = MaterialTheme.typography.bodyMedium)
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = copyTeams,
+                            onCheckedChange = {
+                                copyTeams = it
+                                if (it) copyParticipants = true
+                            }
+                        )
+                        Text("Copia squadre", style = MaterialTheme.typography.bodyMedium)
+                    }
+
+                    if (copyParticipants || copyTeams) {
+                        Spacer(Modifier.height(8.dp))
+                        Box(Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                onClick = { dropdownExpanded = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                val sourceName = competitions.find { it.id == sourceCompetitionId }?.name ?: "Seleziona competizione sorgente"
+                                Text(sourceName)
+                            }
+                            DropdownMenu(
+                                expanded = dropdownExpanded,
+                                onDismissRequest = { dropdownExpanded = false },
+                                modifier = Modifier.fillMaxWidth(0.8f)
+                            ) {
+                                competitions.forEach { comp ->
+                                    DropdownMenuItem(
+                                        text = { Text(comp.name) },
+                                        onClick = {
+                                            sourceCompetitionId = comp.id
+                                            dropdownExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
+            val isReady = name.isNotBlank() && (!copyParticipants || sourceCompetitionId != null)
             Button(
-                onClick = { onConfirm(CreateCompetitionRequest(name, selectedType)) },
-                enabled = name.isNotBlank(),
+                onClick = {
+                    onConfirm(
+                        CreateCompetitionRequest(
+                            name = name,
+                            type = selectedType,
+                            rankingMode = selectedRankingMode,
+                            copyFromCompetitionId = sourceCompetitionId,
+                            copyParticipants = copyParticipants,
+                            copyTeams = copyTeams
+                        )
+                    )
+                },
+                enabled = isReady,
                 shape = MaterialTheme.shapes.large
             ) {
                 Text("Crea Competizione")

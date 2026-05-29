@@ -124,6 +124,7 @@ data class CompetitionResponse(
     val name: String,
     val type: String? = null,
     val status: String? = null,
+    val rankingMode: String = "BOTH",
     val currentUserJoined: Boolean = false
 )
 
@@ -145,7 +146,11 @@ data class CreateSeasonRequest(
 @Serializable
 data class CreateCompetitionRequest(
     val name: String,
-    val type: String
+    val type: String,
+    val rankingMode: String = "BOTH",
+    val copyFromCompetitionId: Long? = null,
+    val copyParticipants: Boolean = false,
+    val copyTeams: Boolean = false
 )
 
 // --- Squadre ---

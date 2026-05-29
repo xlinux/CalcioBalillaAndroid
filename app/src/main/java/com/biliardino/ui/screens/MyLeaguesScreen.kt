@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -15,6 +16,7 @@ import com.biliardino.model.LeagueResponse
 import com.biliardino.viewmodel.AppViewModel
 import com.biliardino.viewmodel.UiState
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MyLeaguesScreen(s: UiState, vm: AppViewModel) {
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -22,12 +24,20 @@ fun MyLeaguesScreen(s: UiState, vm: AppViewModel) {
     var showMenu by remember { mutableStateOf(false) }
     var leagueToJoin by remember { mutableStateOf<LeagueResponse?>(null) }
 
-    Box(Modifier.fillMaxSize()) {
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+    PullToRefreshBox(
+        isRefreshing = s.loading,
+        onRefresh = { 
+            vm.loadMyLeagues()
+            vm.loadPublicLeagues()
+        },
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
             if (s.myLeagues.isNotEmpty()) {
                 item {
                     Text("Le mie Leghe", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -176,44 +186,45 @@ fun MyLeaguesScreen(s: UiState, vm: AppViewModel) {
             )
         }
 
-        if (showJoinDialog) {
-            AlertDialog(
-                onDismissRequest = { 
-                    showJoinDialog = false 
-                    leagueToJoin = null
-                    vm.onInviteCodeChange("")
-                },
-                title = { Text(leagueToJoin?.let { "Unisciti a ${it.name}" } ?: "Unisciti a una Lega") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Inserisci il codice di invito per unirti a questa lega.")
-                        OutlinedTextField(
-                            value = s.inviteCode,
-                            onValueChange = vm::onInviteCodeChange,
-                            label = { Text("Codice Invito") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        vm.joinLeague()
-                        showJoinDialog = false
-                        leagueToJoin = null
-                    }) {
-                        Text("Unisciti")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { 
+            if (showJoinDialog) {
+                AlertDialog(
+                    onDismissRequest = { 
                         showJoinDialog = false 
                         leagueToJoin = null
                         vm.onInviteCodeChange("")
-                    }) {
-                        Text("Annulla")
+                    },
+                    title = { Text(leagueToJoin?.let { "Unisciti a ${it.name}" } ?: "Unisciti a una Lega") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Inserisci il codice di invito per unirti a questa lega.")
+                            OutlinedTextField(
+                                value = s.inviteCode,
+                                onValueChange = vm::onInviteCodeChange,
+                                label = { Text("Codice Invito") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            vm.joinLeague()
+                            showJoinDialog = false
+                            leagueToJoin = null
+                        }) {
+                            Text("Unisciti")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { 
+                            showJoinDialog = false 
+                            leagueToJoin = null
+                            vm.onInviteCodeChange("")
+                        }) {
+                            Text("Annulla")
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     }
 }

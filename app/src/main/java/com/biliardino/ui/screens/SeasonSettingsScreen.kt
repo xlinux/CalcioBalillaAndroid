@@ -79,9 +79,32 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
 
         // Close Competition Action at the end
         if (competition != null && (competition.status == "ACTIVE" || competition.status == null)) {
-            val isAdmin = s.currentUserRoleInLeague == "ADMIN"
-            if (isAdmin) {
+            val isAdminOrOwner = s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER"
+            if (isAdminOrOwner) {
                 Spacer(Modifier.height(24.dp))
+                
+                Button(
+                    onClick = { vm.recalculateCompetition(competition.id) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Text(
+                        "RICALCOLA PUNTI",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Text(
+                    "Rielabora tutte le partite della competizione per aggiornare correttamente le classifiche.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                
+                Spacer(Modifier.height(12.dp))
+
                 Button(
                     onClick = { showCloseCompetitionConfirmation = true },
                     modifier = Modifier.fillMaxWidth(),

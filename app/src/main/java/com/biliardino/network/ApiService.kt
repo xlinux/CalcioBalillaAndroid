@@ -105,6 +105,9 @@ interface CompetitionApi {
 
     @PUT("competizioni/{competitionId}/close")
     suspend fun closeCompetition(@Path("competitionId") competitionId: Long): CompetitionResponse
+
+    @POST("competizioni/{competitionId}/recalculate")
+    suspend fun recalculateCompetition(@Path("competitionId") competitionId: Long)
 }
 
 interface MatchApi {

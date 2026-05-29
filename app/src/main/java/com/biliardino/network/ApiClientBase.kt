@@ -10,8 +10,8 @@ import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFact
 import okhttp3.MediaType.Companion.toMediaType
 
 object ApiClientBase {
- //   private const val BASE_URL = "https://calciobalillabackend.onrender.com/"
-  private const val BASE_URL = "http://192.168.1.31:8080/"
+      private const val BASE_URL = "https://calciobalillabackend.onrender.com/"
+    //private const val BASE_URL = "http://192.168.1.32:8080/"
 
 
     var authToken: String? = null

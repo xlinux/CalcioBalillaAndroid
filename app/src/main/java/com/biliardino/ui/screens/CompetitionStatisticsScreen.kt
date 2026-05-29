@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,19 +31,26 @@ import java.time.format.DateTimeFormatter
 fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, competition: CompetitionResponse, s: UiState, vm: AppViewModel) {
     // Carichiamo i dati all'avvio se la lista è vuota
     LaunchedEffect(competition.id) {
-        vm.loadRankings(competition.id)
+        vm.loadRankings(competition.id, competition.rankingMode)
     }
 
     Column(Modifier.fillMaxSize()) {
         var selectedTab by remember { mutableIntStateOf(0) }
         val tabs = listOf("Classifica", "Partite", "Squadre", "Giocatori")
+        val showPlayerRanking = competition.rankingMode != "TEAM"
+        val showTeamRanking = competition.rankingMode != "PLAYER"
 
         TabRow(
             selectedTabIndex = selectedTab,
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+            containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
         ) {
             tabs.forEachIndexed { index, title ->
-                Tab(selected = selectedTab == index, onClick = { selectedTab = index }, text = { Text(title) })
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    text = { Text(title, fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal) },
+                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
@@ -50,11 +58,27 @@ fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, 
             when (selectedTab) {
                 0 -> Column {
                     var rankingTab by remember { mutableIntStateOf(0) }
-                    TabRow(selectedTabIndex = rankingTab, containerColor = MaterialTheme.colorScheme.surfaceVariant) {
-                        Tab(selected = rankingTab == 0, onClick = { rankingTab = 0 }, text = { Text("Giocatori", fontSize = 12.sp) })
-                        Tab(selected = rankingTab == 1, onClick = { rankingTab = 1 }, text = { Text("Squadre", fontSize = 12.sp) })
+                    if (showPlayerRanking && showTeamRanking) {
+                        TabRow(selectedTabIndex = rankingTab, containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)) {
+                            Tab(
+                                selected = rankingTab == 0,
+                                onClick = { rankingTab = 0 },
+                                text = { Text("Giocatori", fontSize = 12.sp, fontWeight = if (rankingTab == 0) FontWeight.Bold else FontWeight.Normal) },
+                                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Tab(
+                                selected = rankingTab == 1,
+                                onClick = { rankingTab = 1 },
+                                text = { Text("Squadre", fontSize = 12.sp, fontWeight = if (rankingTab == 1) FontWeight.Bold else FontWeight.Normal) },
+                                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
-                    if (rankingTab == 0) PlayerRankingList(s.playerRankings) else TeamRankingList(s.teamRankings)
+                    when {
+                        showPlayerRanking && showTeamRanking && rankingTab == 1 -> TeamRankingList(s.teamRankings)
+                        showTeamRanking -> TeamRankingList(s.teamRankings)
+                        else -> PlayerRankingList(s.playerRankings)
+                    }
                 }
                 1 -> MatchList(s.seasonMatches, s.seasonTeams)
                 2 -> TeamList(s.seasonTeams) { team ->
@@ -80,18 +104,18 @@ fun PlayerRankingList(rankings: List<PlayerRankingResponse>) {
             Modifier
                 .wrapContentWidth()
                 .horizontalScroll(scrollState)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                .background(MaterialTheme.colorScheme.surfaceColorAtElevation(4.dp))
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("#", Modifier.width(30.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Giocatore", Modifier.width(180.dp), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Rat", Modifier.width(45.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("P", Modifier.width(30.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("GF", Modifier.width(35.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("GS", Modifier.width(35.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("CF", Modifier.width(35.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("CS", Modifier.width(35.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("#", Modifier.width(30.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
+            Text("Giocatore", Modifier.width(180.dp), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Text("Rat", Modifier.width(45.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
+            Text("P", Modifier.width(30.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
+            Text("GF", Modifier.width(35.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
+            Text("GS", Modifier.width(35.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
+            Text("CF", Modifier.width(35.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
+            Text("CS", Modifier.width(35.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
         }
         HorizontalDivider()
 
@@ -105,20 +129,21 @@ fun PlayerRankingList(rankings: List<PlayerRankingResponse>) {
                         .padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("${index + 1}", Modifier.width(30.dp), textAlign = TextAlign.Center, fontSize = 14.sp)
+                    Text("${index + 1}", Modifier.width(30.dp), textAlign = TextAlign.Center, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(
                         player.username,
                         Modifier.width(180.dp),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        fontSize = 14.sp
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
-                    Text("${player.rating}", Modifier.width(45.dp), textAlign = TextAlign.Center, fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                    Text("${player.matchesPlayed}", Modifier.width(30.dp), textAlign = TextAlign.Center, fontSize = 14.sp)
-                    Text("${player.goalsFor}", Modifier.width(35.dp), textAlign = TextAlign.Center, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
-                    Text("${player.goalsAgainst}", Modifier.width(35.dp), textAlign = TextAlign.Center, fontSize = 14.sp, color = MaterialTheme.colorScheme.error)
-                    Text("${player.cappottiGiven}", Modifier.width(35.dp), textAlign = TextAlign.Center, fontSize = 14.sp)
-                    Text("${player.cappottiReceived}", Modifier.width(35.dp), textAlign = TextAlign.Center, fontSize = 14.sp)
+                    Text("${player.rating}", Modifier.width(45.dp), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+                    Text("${player.matchesPlayed}", Modifier.width(30.dp), textAlign = TextAlign.Center, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+                    Text("${player.goalsFor}", Modifier.width(35.dp), textAlign = TextAlign.Center, fontSize = 14.sp, color = if (isSystemInDarkTheme()) Color(0xFF4CAF50) else Color(0xFF2E7D32))
+                    Text("${player.goalsAgainst}", Modifier.width(35.dp), textAlign = TextAlign.Center, fontSize = 14.sp, color = if (isSystemInDarkTheme()) Color(0xFFEF5350) else Color(0xFFD32F2F))
+                    Text("${player.cappottiGiven}", Modifier.width(35.dp), textAlign = TextAlign.Center, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+                    Text("${player.cappottiReceived}", Modifier.width(35.dp), textAlign = TextAlign.Center, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                 }
                 HorizontalDivider(thickness = 0.5.dp)
             }
@@ -136,18 +161,18 @@ fun TeamRankingList(rankings: List<TeamRankingResponse>) {
             Modifier
                 .wrapContentWidth()
                 .horizontalScroll(scrollState)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                .background(MaterialTheme.colorScheme.surfaceColorAtElevation(4.dp))
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("#", Modifier.width(30.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Squadra", Modifier.width(200.dp), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Rat", Modifier.width(45.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("P", Modifier.width(30.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("GF", Modifier.width(35.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("GS", Modifier.width(35.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("CF", Modifier.width(35.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("CS", Modifier.width(35.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("#", Modifier.width(30.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
+            Text("Squadra", Modifier.width(200.dp), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Text("Rat", Modifier.width(45.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
+            Text("P", Modifier.width(30.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
+            Text("GF", Modifier.width(35.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
+            Text("GS", Modifier.width(35.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
+            Text("CF", Modifier.width(35.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
+            Text("CS", Modifier.width(35.dp), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface)
         }
         HorizontalDivider()
 
@@ -162,22 +187,23 @@ fun TeamRankingList(rankings: List<TeamRankingResponse>) {
                             .padding(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("${index + 1}", Modifier.width(30.dp), textAlign = TextAlign.Center, fontSize = 14.sp)
+                        Text("${index + 1}", Modifier.width(30.dp), textAlign = TextAlign.Center, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Column(Modifier.width(200.dp)) {
-                            Text(team.teamName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(team.teamName, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                             Text(
                                 "${team.playerAUsername} & ${team.playerBUsername}",
                                 style = MaterialTheme.typography.bodySmall,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Text("${team.rating}", Modifier.width(45.dp), textAlign = TextAlign.Center, fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                        Text("${team.matchesPlayed}", Modifier.width(30.dp), textAlign = TextAlign.Center, fontSize = 14.sp)
-                        Text("${team.goalsFor}", Modifier.width(35.dp), textAlign = TextAlign.Center, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
-                        Text("${team.goalsAgainst}", Modifier.width(35.dp), textAlign = TextAlign.Center, fontSize = 14.sp, color = MaterialTheme.colorScheme.error)
-                        Text("${team.cappottiGiven}", Modifier.width(35.dp), textAlign = TextAlign.Center, fontSize = 14.sp)
-                        Text("${team.cappottiReceived}", Modifier.width(35.dp), textAlign = TextAlign.Center, fontSize = 14.sp)
+                        Text("${team.rating}", Modifier.width(45.dp), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+                        Text("${team.matchesPlayed}", Modifier.width(30.dp), textAlign = TextAlign.Center, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+                        Text("${team.goalsFor}", Modifier.width(35.dp), textAlign = TextAlign.Center, fontSize = 14.sp, color = if (isSystemInDarkTheme()) Color(0xFF4CAF50) else Color(0xFF2E7D32))
+                        Text("${team.goalsAgainst}", Modifier.width(35.dp), textAlign = TextAlign.Center, fontSize = 14.sp, color = if (isSystemInDarkTheme()) Color(0xFFEF5350) else Color(0xFFD32F2F))
+                        Text("${team.cappottiGiven}", Modifier.width(35.dp), textAlign = TextAlign.Center, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+                        Text("${team.cappottiReceived}", Modifier.width(35.dp), textAlign = TextAlign.Center, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                     }
                     HorizontalDivider(thickness = 0.5.dp)
                 }

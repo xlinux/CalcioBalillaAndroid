@@ -273,15 +273,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             currentCompetition = competition,
             currentScreen = Screen.CompetitionStatistics(league, season, competition)
         )
-        loadRankings(competition.id)
+        loadRankings(competition.id, competition.rankingMode)
         loadCompetitionMatches(competition.id)
     }
 
-    fun loadRankings(competitionId: Long) = viewModelScope.launch {
+    fun loadRankings(competitionId: Long, rankingMode: String? = null) = viewModelScope.launch {
+        val resolvedRankingMode = rankingMode ?: rankingModeForCompetition(competitionId)
         _state.value = _state.value.copy(loading = true, error = null)
         runCatching {
-            val players = ApiClientBase.competitions.getPlayerRankings(competitionId)
-            val teams = ApiClientBase.competitions.getTeamRankings(competitionId)
+            val players = if (resolvedRankingMode != "TEAM") {
+                ApiClientBase.competitions.getPlayerRankings(competitionId)
+            } else {
+                emptyList()
+            }
+            val teams = if (resolvedRankingMode != "PLAYER") {
+                ApiClientBase.competitions.getTeamRankings(competitionId)
+            } else {
+                emptyList()
+            }
             players to teams
         }.onSuccess { (players, teams) ->
             _state.value = _state.value.copy(
@@ -292,6 +301,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }.onFailure { e ->
             _state.value = _state.value.copy(loading = false, error = "Errore classifiche: ${e.getErrorMessage()}")
         }
+    }
+
+    private fun rankingModeForCompetition(competitionId: Long): String {
+        val state = _state.value
+        return state.currentCompetition?.takeIf { it.id == competitionId }?.rankingMode
+            ?: state.competitions.firstOrNull { it.id == competitionId }?.rankingMode
+            ?: "BOTH"
     }
 
     fun loadCompetitionMatches(competitionId: Long) = viewModelScope.launch {
@@ -447,6 +463,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             .onFailure { e ->
                 _state.value = _state.value.copy(loading = false, error = "Errore chiusura competizione: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun recalculateCompetition(competitionId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.competitions.recalculateCompetition(competitionId) }
+            .onSuccess {
+                _state.value = _state.value.copy(
+                    successMessage = "Ricalcolo punti completato!",
+                    loading = false
+                )
+                // Refresh rankings
+                loadRankings(competitionId)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore durante il ricalcolo: ${e.getErrorMessage()}")
             }
     }
 

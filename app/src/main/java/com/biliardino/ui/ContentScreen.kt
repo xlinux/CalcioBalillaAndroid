@@ -149,7 +149,7 @@ fun ContentScreen(vm: AppViewModel) {
                                 selected = screen is Screen.CompetitionStatistics || screen is Screen.TeamDetail || screen is Screen.PlayerDetail,
                                 onClick = { 
                                     vm.navigateTo(Screen.CompetitionStatistics(league, season, competition))
-                                    vm.loadRankings(competition.id)
+                                    vm.loadRankings(competition.id, competition.rankingMode)
                                 },
                                 icon = { Icon(Icons.Default.List, contentDescription = "Home") },
                                 label = { Text("Stats") }
