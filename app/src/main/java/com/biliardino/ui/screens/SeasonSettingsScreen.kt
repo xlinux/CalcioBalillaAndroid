@@ -11,12 +11,18 @@ import androidx.compose.ui.unit.dp
 import com.biliardino.model.CompetitionResponse
 import com.biliardino.model.LeagueResponse
 import com.biliardino.model.SeasonResponse
+import com.biliardino.ui.Screen
+import com.biliardino.util.DateUtils
 import com.biliardino.viewmodel.AppViewModel
 import com.biliardino.viewmodel.UiState
 
 @Composable
 fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competition: CompetitionResponse?, s: UiState, vm: AppViewModel) {
     var showCloseCompetitionConfirmation by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        vm.loadSeasonStatsData(league.id, season.id, competition?.id)
+    }
 
     Column(
         modifier = Modifier
@@ -33,49 +39,83 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
             )
 
             InfoCard(
-                title = "Informazioni Competizione",
-                items = listOf(
+                title = "Informazioni Generali",
+                items = mutableListOf(
                     "Nome" to competition.name,
+                    "Sport" to (competition.sportName ?: "Calcio Balilla"),
                     "Tipo" to if (competition.type == "LEAGUE") "Campionato" else "Torneo",
+                    "Modalità" to when(competition.matchType) {
+                        "SINGLE" -> "Singolo (1vs1)"
+                        "DOUBLE" -> "Doppio (2vs2)"
+                        "TEAM" -> "Squadra"
+                        else -> competition.matchType
+                    },
+                    "Data Inizio" to DateUtils.formatDate(competition.startDate),
+                    "Data Fine" to DateUtils.formatDate(competition.endDate),
                     "Stato" to if (competition.status == "ACTIVE" || competition.status == null) "Attiva" else "Conclusa"
                 )
             )
+
+            InfoCard(
+                title = "Regole del Match",
+                items = mutableListOf<Pair<String, String>>().apply {
+                    add("Formato" to if (competition.matchFormat == "POINTS") "A Punti" else "A Set")
+                    if (competition.matchFormat == "POINTS" && competition.useTargetScore) {
+                        add("Punteggio Target" to "${competition.targetScore} punti")
+                        if (competition.cappottoEnabled) {
+                            add("Bonus Cappotto" to "+${competition.cappottoBonusPoints} punti")
+                        }
+                    }
+                    add("Andata e Ritorno" to if (competition.homeAndAway) "Sì" else "No")
+                }
+            )
+
+            InfoCard(
+                title = "Sistema Classifica",
+                items = mutableListOf(
+                    "Tipo Ranking" to when(competition.competitionRankingType) {
+                        "POINTS" -> "Punti Classifica"
+                        "ELO" -> "Sistema ELO"
+                        "WIN_RATE" -> "Percentuale Vittorie"
+                        else -> competition.competitionRankingType
+                    },
+                    "Visibilità" to when(competition.rankingMode) {
+                        "PLAYER" -> "Solo Giocatori"
+                        "TEAM" -> "Solo Squadre"
+                        else -> "Giocatori e Squadre"
+                    }
+                ).apply {
+                    if (competition.competitionRankingType == "POINTS") {
+                        add("Punti Vittoria" to "${competition.winPoints} pt")
+                        if (competition.allowDraw) {
+                            add("Punti Pareggio" to "${competition.drawPoints} pt")
+                        }
+                        add("Punti Sconfitta" to "${competition.lossPoints} pt")
+                    }
+                }
+            )
             
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            val isAdminOrOwner = s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER"
+            if (isAdminOrOwner) {
+                Button(
+                    onClick = {
+                        vm.navigateTo(Screen.CompetitionParticipants(league, season, competition))
+                        vm.loadCompetitionPlayers(competition.id)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Text(
+                        "GESTISCI PARTECIPANTI",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
-
-        Text(
-            text = "Dettagli Stagione",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
-        )
-
-        InfoCard(
-            title = "Informazioni Generali",
-            items = listOf(
-                "Nome" to season.name,
-                "Data Inizio" to season.startDate,
-                "Data Fine" to season.endDate,
-                "Stato" to if (season.active == true) "Attiva" else "Conclusa"
-            )
-        )
-
-        InfoCard(
-            title = "Regolamento Punteggio",
-            items = listOf(
-                "Punteggio Vittoria" to "${season.targetScore} punti",
-                "Abilita Cappotto" to if (season.cappottoEnabled) "Sì" else "No",
-                "Bonus Cappotto" to if (season.cappottoEnabled) "+${season.cappottoBonus} punti" else "N/A"
-            )
-        )
-
-        InfoCard(
-            title = "Permessi e Restrizioni",
-            items = listOf(
-                "Iscrizione post-inizio" to if (season.allowJoinAfterStart) "Permessa" else "Bloccata",
-                "Partite post-fine" to if (season.allowMatchesAfterEnd) "Permesse" else "Bloccate"
-            )
-        )
 
         // Close Competition Action at the end
         if (competition != null && (competition.status == "ACTIVE" || competition.status == null)) {

@@ -26,170 +26,149 @@ fun MyLeaguesScreen(s: UiState, vm: AppViewModel) {
 
     PullToRefreshBox(
         isRefreshing = s.loading,
-        onRefresh = { 
+        onRefresh = {
             vm.loadMyLeagues()
             vm.loadPublicLeagues()
         },
         modifier = Modifier.fillMaxSize()
     ) {
         Box(Modifier.fillMaxSize()) {
-            LazyColumn(
-                Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-            if (s.myLeagues.isNotEmpty()) {
-                item {
-                    Text("Le mie Leghe", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                }
-                items(s.myLeagues) { league ->
-                    LeagueCard(
-                        league = league,
-                        onCLick = { vm.selectLeague(league) },
-                        showInviteCode = true
-                    )
-                }
-            }
-
-            // Filtriamo le leghe pubbliche per non mostrare quelle dove sono già iscritto
             val myLeagueIds = s.myLeagues.map { it.id }.toSet()
             val otherLeagues = s.publicLeagues.filter { it.id !in myLeagueIds }
 
-            if (otherLeagues.isNotEmpty()) {
-                item {
-                    Spacer(Modifier.height(16.dp))
-                    Text("Altre Leghe", style = MaterialTheme.typography.titleLarge)
-                }
-                
-                items(otherLeagues) { league ->
-                    LeagueCard(
-                        league = league,
-                        onCLick = { 
-                            // Obbligatorio chiedere il codice per utenti registrati
-                            leagueToJoin = league
-                            showJoinDialog = true
-                        },
-                        showInviteCode = false
-                    )
-                }
-            } else if (s.myLeagues.isNotEmpty()) {
-                // Se ho delle mie leghe ma non ci sono "altre" leghe
-                item {
-                    Spacer(Modifier.height(16.dp))
-                    Text("Altre Leghe", style = MaterialTheme.typography.titleLarge)
-                    Spacer(Modifier.height(8.dp))
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Text(
-                            "Nessuna lega presente",
-                            modifier = Modifier.padding(16.dp),
-                            style = MaterialTheme.typography.bodyMedium
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                if (s.myLeagues.isNotEmpty()) {
+                    item {
+                        LeagueSectionHeader(
+                            title = "Le mie leghe",
+                            count = s.myLeagues.size
+                        )
+                    }
+                    items(s.myLeagues) { league ->
+                        LeagueCard(
+                            league = league,
+                            onCLick = { vm.selectLeague(league) },
+                            showInviteCode = true
                         )
                     }
                 }
-            }
 
-            if (s.myLeagues.isEmpty() && s.publicLeagues.isEmpty() && !s.loading) {
-                item {
-                    Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                if (otherLeagues.isNotEmpty()) {
+                    item {
+                        Spacer(Modifier.height(8.dp))
+                        LeagueSectionHeader(
+                            title = "Altre leghe",
+                            count = otherLeagues.size
+                        )
+                    }
+                    items(otherLeagues) { league ->
+                        LeagueCard(
+                            league = league,
+                            onCLick = {
+                                leagueToJoin = league
+                                showJoinDialog = true
+                            },
+                            showInviteCode = false
+                        )
+                    }
+                } else if (s.myLeagues.isNotEmpty()) {
+                    item {
+                        Spacer(Modifier.height(8.dp))
+                        LeagueSectionHeader(
+                            title = "Altre leghe",
+                            count = 0
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        EmptyLeagueCard("Nessuna altra lega disponibile")
+                    }
+                }
+
+                if (s.myLeagues.isEmpty() && s.publicLeagues.isEmpty() && !s.loading) {
+                    item {
+                        Box(
+                            Modifier.fillParentMaxSize(),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Column(
-                                Modifier.padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    "Nessuna Lega",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                Text(
-                                    "Non sei ancora iscritto a nessuna lega. Creane una o unisciti a una esistente!",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-                            }
+                            EmptyLeagueCard("Non sei ancora iscritto a nessuna lega. Creane una o unisciti a una esistente!")
                         }
                     }
                 }
             }
-        }
 
-        Box(modifier = Modifier
-            .padding(16.dp)
-            .align(Alignment.BottomEnd)) {
-            FloatingActionButton(
-                onClick = { showMenu = true }
+            Box(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .align(Alignment.BottomEnd)
             ) {
-                Icon(Icons.Default.Add, "Opzioni Lega")
-            }
-            
-            DropdownMenu(
-                expanded = showMenu,
-                onDismissRequest = { showMenu = false }
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Crea Nuova Lega") },
-                    onClick = {
-                        showMenu = false
-                        showCreateDialog = true
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Unisciti con Codice") },
-                    onClick = {
-                        showMenu = false
-                        showJoinDialog = true
-                    }
-                )
-            }
-        }
-
-        if (showCreateDialog) {
-            AlertDialog(
-                onDismissRequest = { showCreateDialog = false },
-                title = { Text("Nuova Lega") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = s.newLeagueName,
-                            onValueChange = vm::onNewLeagueNameChange,
-                            label = { Text("Nome Lega") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = s.newLeagueDescription,
-                            onValueChange = vm::onNewLeagueDescriptionChange,
-                            label = { Text("Descrizione") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        vm.createLeague()
-                        showCreateDialog = false
-                    }) {
-                        Text("Crea")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showCreateDialog = false }) {
-                        Text("Annulla")
-                    }
+                FloatingActionButton(onClick = { showMenu = true }) {
+                    Icon(Icons.Default.Add, "Opzioni Lega")
                 }
-            )
-        }
+
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Crea Nuova Lega") },
+                        onClick = {
+                            showMenu = false
+                            showCreateDialog = true
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Unisciti con Codice") },
+                        onClick = {
+                            showMenu = false
+                            showJoinDialog = true
+                        }
+                    )
+                }
+            }
+
+            if (showCreateDialog) {
+                AlertDialog(
+                    onDismissRequest = { showCreateDialog = false },
+                    title = { Text("Nuova Lega") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = s.newLeagueName,
+                                onValueChange = vm::onNewLeagueNameChange,
+                                label = { Text("Nome Lega") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = s.newLeagueDescription,
+                                onValueChange = vm::onNewLeagueDescriptionChange,
+                                label = { Text("Descrizione") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            vm.createLeague()
+                            showCreateDialog = false
+                        }) {
+                            Text("Crea")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showCreateDialog = false }) {
+                            Text("Annulla")
+                        }
+                    }
+                )
+            }
 
             if (showJoinDialog) {
                 AlertDialog(
-                    onDismissRequest = { 
-                        showJoinDialog = false 
+                    onDismissRequest = {
+                        showJoinDialog = false
                         leagueToJoin = null
                         vm.onInviteCodeChange("")
                     },
@@ -215,8 +194,8 @@ fun MyLeaguesScreen(s: UiState, vm: AppViewModel) {
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = { 
-                            showJoinDialog = false 
+                        TextButton(onClick = {
+                            showJoinDialog = false
                             leagueToJoin = null
                             vm.onInviteCodeChange("")
                         }) {
@@ -225,6 +204,33 @@ fun MyLeaguesScreen(s: UiState, vm: AppViewModel) {
                     }
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun EmptyLeagueCard(message: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = MaterialTheme.shapes.large
+    ) {
+        Column(
+            Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                "Nessuna lega",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                message,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

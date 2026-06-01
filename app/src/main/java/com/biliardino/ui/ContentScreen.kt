@@ -80,12 +80,21 @@ fun ContentScreen(vm: AppViewModel) {
                                 is Screen.Profile -> vm.navigateTo(Screen.MyLeagues)
                                 is Screen.LeagueSeasons -> vm.navigateTo(Screen.MyLeagues)
                                 is Screen.SeasonCompetitions -> vm.navigateTo(Screen.LeagueSeasons(screen.league))
+                                is Screen.CreateCompetition -> vm.navigateTo(Screen.SeasonCompetitions(screen.league, screen.season))
                                 is Screen.CompetitionStatistics -> vm.navigateTo(Screen.SeasonCompetitions(screen.league, screen.season))
                                 is Screen.CompetitionMatches -> vm.navigateTo(Screen.SeasonCompetitions(screen.league, screen.season))
-                                is Screen.SeasonTeams -> vm.navigateTo(Screen.LeagueSeasons(screen.league))
-                                is Screen.SeasonSettings -> vm.navigateTo(Screen.LeagueSeasons(screen.league))
+                                is Screen.CompetitionParticipants -> vm.navigateTo(Screen.SeasonSettings(screen.league, screen.season, screen.competition))
+                                is Screen.SeasonTeams -> {
+                                    if (screen.competition != null) {
+                                        vm.navigateTo(Screen.CompetitionStatistics(screen.league, screen.season, screen.competition))
+                                    } else {
+                                        vm.navigateTo(Screen.SeasonCompetitions(screen.league, screen.season))
+                                    }
+                                }
+                                is Screen.SeasonSettings -> vm.navigateTo(Screen.SeasonCompetitions(screen.league, screen.season))
                                 is Screen.TeamDetail -> vm.navigateTo(Screen.CompetitionStatistics(screen.league, screen.season, screen.competition))
-                                is Screen.PlayerDetail -> vm.navigateTo(Screen.CompetitionStatistics(screen.league, screen.season, screen.competition))
+                                is Screen.PlayerDetail -> vm.navigateTo(Screen.CompetitionStatistics(screen.league, season = screen.season, competition = screen.competition))
+                                is Screen.JoinTeam -> vm.navigateTo(Screen.SeasonCompetitions(screen.league, screen.season))
                                 else -> {}
                             }
                         }) {
@@ -113,10 +122,11 @@ fun ContentScreen(vm: AppViewModel) {
     },
         bottomBar = {
             val screen = s.currentScreen
-            if (screen is Screen.CompetitionStatistics || screen is Screen.CompetitionMatches || screen is Screen.SeasonTeams || screen is Screen.SeasonSettings || screen is Screen.TeamDetail || screen is Screen.PlayerDetail) {
+            if (screen is Screen.CompetitionStatistics || screen is Screen.CompetitionMatches || screen is Screen.CompetitionParticipants || screen is Screen.SeasonTeams || screen is Screen.SeasonSettings || screen is Screen.TeamDetail || screen is Screen.PlayerDetail) {
                 val league = when (screen) {
                     is Screen.CompetitionStatistics -> screen.league
                     is Screen.CompetitionMatches -> screen.league
+                    is Screen.CompetitionParticipants -> screen.league
                     is Screen.SeasonTeams -> screen.league
                     is Screen.SeasonSettings -> screen.league
                     is Screen.TeamDetail -> screen.league
@@ -126,6 +136,7 @@ fun ContentScreen(vm: AppViewModel) {
                 val season = when (screen) {
                     is Screen.CompetitionStatistics -> screen.season
                     is Screen.CompetitionMatches -> screen.season
+                    is Screen.CompetitionParticipants -> screen.season
                     is Screen.SeasonTeams -> screen.season
                     is Screen.SeasonSettings -> screen.season
                     is Screen.TeamDetail -> screen.season
@@ -135,6 +146,7 @@ fun ContentScreen(vm: AppViewModel) {
                 val competition = when (screen) {
                     is Screen.CompetitionStatistics -> screen.competition
                     is Screen.CompetitionMatches -> screen.competition
+                    is Screen.CompetitionParticipants -> screen.competition
                     is Screen.SeasonTeams -> screen.competition
                     is Screen.SeasonSettings -> screen.competition
                     is Screen.TeamDetail -> screen.competition
@@ -146,10 +158,13 @@ fun ContentScreen(vm: AppViewModel) {
                     NavigationBar {
                         if (competition != null) {
                             NavigationBarItem(
-                                selected = screen is Screen.CompetitionStatistics || screen is Screen.TeamDetail || screen is Screen.PlayerDetail,
+                                selected = screen is Screen.CompetitionStatistics || screen is Screen.TeamDetail || screen is Screen.PlayerDetail || screen is Screen.SeasonTeams || screen is Screen.CompetitionParticipants,
                                 onClick = { 
                                     vm.navigateTo(Screen.CompetitionStatistics(league, season, competition))
                                     vm.loadRankings(competition.id, competition.rankingMode)
+                                    vm.loadCompetitionMatches(competition.id)
+                                    vm.loadCompetitionPlayers(competition.id)
+                                    vm.loadSeasonStatsData(league.id, season.id, competition.id)
                                 },
                                 icon = { Icon(Icons.Default.List, contentDescription = "Home") },
                                 label = { Text("Stats") }
@@ -159,20 +174,12 @@ fun ContentScreen(vm: AppViewModel) {
                                 onClick = { 
                                     vm.navigateTo(Screen.CompetitionMatches(league, season, competition))
                                     vm.loadCompetitionMatches(competition.id)
+                                    vm.loadSeasonStatsData(league.id, season.id, competition.id)
                                 },
                                 icon = { Icon(Icons.Default.Add, contentDescription = "Partite") },
                                 label = { Text("Partite") }
                             )
                         }
-                        NavigationBarItem(
-                            selected = screen is Screen.SeasonTeams,
-                            onClick = { 
-                                vm.navigateTo(Screen.SeasonTeams(league, season, competition))
-                                vm.loadSeasonStatsData(league.id, season.id)
-                            },
-                            icon = { Icon(Icons.Default.Person, contentDescription = "Squadre") },
-                            label = { Text("Squadre") }
-                        )
                         NavigationBarItem(
                             selected = screen is Screen.SeasonSettings,
                             onClick = { 
@@ -201,12 +208,15 @@ fun ContentScreen(vm: AppViewModel) {
                     is Screen.Profile -> ProfileScreen(s, vm)
                     is Screen.LeagueSeasons -> LeagueSeasonsScreen(screen.league, s, vm)
                     is Screen.SeasonCompetitions -> SeasonCompetitionsScreen(screen.league, screen.season, s, vm)
+                    is Screen.CreateCompetition -> CreateCompetitionScreen(screen.league, screen.season, s, vm)
                     is Screen.CompetitionStatistics -> CompetitionStatisticsScreen(screen.league, screen.season, screen.competition, s, vm)
                     is Screen.CompetitionMatches -> CompetitionMatchesScreen(screen.league, screen.season, screen.competition, s, vm)
+                    is Screen.CompetitionParticipants -> CompetitionParticipantsScreen(screen.league, screen.season, screen.competition, s, vm)
                     is Screen.SeasonTeams -> SeasonTeamsScreen(screen.league, screen.season, screen.competition, s, vm)
                     is Screen.SeasonSettings -> SeasonSettingsScreen(screen.league, screen.season, screen.competition, s, vm)
                     is Screen.TeamDetail -> TeamDetailScreen(screen.league, screen.season, screen.competition, screen.team, s, vm)
                     is Screen.PlayerDetail -> PlayerDetailScreen(screen.league, screen.season, screen.competition, screen.user, s, vm)
+                    is Screen.JoinTeam -> JoinTeamScreen(screen.league, screen.season, screen.competition, s, vm)
                     else -> {}
                 }
             }
@@ -240,10 +250,13 @@ private fun getScreenTitle(screen: Screen): String = when (screen) {
     is Screen.Profile -> "Profilo"
     is Screen.LeagueSeasons -> screen.league.name
     is Screen.SeasonCompetitions -> screen.season.name
+    is Screen.CreateCompetition -> "Nuova Competizione"
     is Screen.CompetitionStatistics -> screen.competition.name
     is Screen.CompetitionMatches -> "Partite"
+    is Screen.CompetitionParticipants -> "Partecipanti"
     is Screen.SeasonTeams -> "Squadre"
     is Screen.SeasonSettings -> "Impostazioni"
     is Screen.TeamDetail -> screen.team.name
     is Screen.PlayerDetail -> screen.user.username
+    is Screen.JoinTeam -> "Partecipa alla Squadra"
 }

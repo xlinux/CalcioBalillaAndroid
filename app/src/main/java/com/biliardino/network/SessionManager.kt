@@ -14,6 +14,7 @@ private val Context.dataStore by preferencesDataStore(name = "session")
 class SessionManager(private val context: Context) {
     companion object {
         private val TOKEN_KEY = stringPreferencesKey("auth_token")
+        private val REFRESH_TOKEN_KEY = stringPreferencesKey("refresh_token")
         private const val SECURE_PREFS_NAME = "secure_session"
         private const val EMAIL_KEY = "user_email"
         private const val PASSWORD_KEY = "user_password"
@@ -35,6 +36,17 @@ class SessionManager(private val context: Context) {
 
     val authToken: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[TOKEN_KEY]
+    }
+
+    val refreshToken: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[REFRESH_TOKEN_KEY]
+    }
+
+    suspend fun saveTokens(jwt: String, refreshToken: String) {
+        context.dataStore.edit { preferences ->
+            preferences[TOKEN_KEY] = jwt
+            preferences[REFRESH_TOKEN_KEY] = refreshToken
+        }
     }
 
     suspend fun saveToken(token: String) {
@@ -69,6 +81,7 @@ class SessionManager(private val context: Context) {
     suspend fun clearSession() {
         context.dataStore.edit { preferences ->
             preferences.remove(TOKEN_KEY)
+            preferences.remove(REFRESH_TOKEN_KEY)
         }
         // Non cancelliamo le credenziali qui per permettere il login biometrico successivo.
         // Se l'utente vuole cambiare account, le nuove credenziali sovrascriveranno le vecchie al login.

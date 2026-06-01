@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EmojiEvents
@@ -30,6 +31,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -37,6 +39,7 @@ import com.biliardino.model.CreateSeasonRequest
 import com.biliardino.model.LeagueMemberResponse
 import com.biliardino.model.LeagueResponse
 import com.biliardino.model.SeasonResponse
+import com.biliardino.util.DateUtils
 import com.biliardino.viewmodel.AppViewModel
 import com.biliardino.viewmodel.UiState
 import java.time.LocalDate
@@ -413,7 +416,7 @@ fun SeasonCard(season: SeasonResponse, isAdmin: Boolean, onSelect: () -> Unit, o
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            "${season.startDate} - ${season.endDate}",
+                            "${DateUtils.formatDate(season.startDate)} - ${DateUtils.formatDate(season.endDate)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -421,30 +424,6 @@ fun SeasonCard(season: SeasonResponse, isAdmin: Boolean, onSelect: () -> Unit, o
                 }
 
                 StatusBadge(isActive)
-            }
-
-            Spacer(Modifier.height(16.dp))
-            
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-                shape = MaterialTheme.shapes.medium
-            ) {
-                Row(
-                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "🎯 Obiettivo:",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "${season.targetScore} punti",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
             }
 
             if (isAdmin && isActive) {
@@ -614,14 +593,9 @@ fun MemberItem(member: LeagueMemberResponse, currentUserRole: String?, onUpdateR
 @Composable
 fun CreateSeasonDialog(onDismiss: () -> Unit, onConfirm: (CreateSeasonRequest) -> Unit) {
     var name by remember { mutableStateOf("") }
-    var targetScore by remember { mutableStateOf("10") }
-    var cappottoEnabled by remember { mutableStateOf(true) }
-    var cappottoBonus by remember { mutableStateOf("2") }
-    var allowJoinAfterStart by remember { mutableStateOf(true) }
-    var allowMatchesAfterEnd by remember { mutableStateOf(false) }
-    var copyPlayers by remember { mutableStateOf(true) }
-    var copyTeams by remember { mutableStateOf(true) }
-    var createChampionship by remember { mutableStateOf(true) }
+    var startDate by remember { mutableStateOf(DateUtils.now()) }
+    var endDate by remember { mutableStateOf(DateUtils.monthsFromNow(12)) }
+    var copyTeams by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -631,78 +605,42 @@ fun CreateSeasonDialog(onDismiss: () -> Unit, onConfirm: (CreateSeasonRequest) -
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Nome Stagione") },
+                    placeholder = { Text("es: Stagione 2025/2026") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.large
                 )
                 
                 OutlinedTextField(
-                    value = targetScore,
-                    onValueChange = { targetScore = it },
-                    label = { Text("Punteggio Vittoria") },
+                    value = startDate,
+                    onValueChange = { startDate = it },
+                    label = { Text("Data Inizio (GG/MM/AAAA)") },
                     modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     shape = MaterialTheme.shapes.large
                 )
 
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                OutlinedTextField(
+                    value = endDate,
+                    onValueChange = { endDate = it },
+                    label = { Text("Data Fine (GG/MM/AAAA)") },
+                    modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.large
-                ) {
-                    Column(Modifier.padding(8.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = cappottoEnabled, onCheckedChange = { cappottoEnabled = it })
-                            Text("Abilita Cappotto", style = MaterialTheme.typography.bodyMedium)
-                        }
-
-                        if (cappottoEnabled) {
-                            OutlinedTextField(
-                                value = cappottoBonus,
-                                onValueChange = { cappottoBonus = it },
-                                label = { Text("Valore Bonus Cappotto") },
-                                modifier = Modifier.fillMaxWidth().padding(8.dp),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                shape = MaterialTheme.shapes.medium
-                            )
-                        }
-                    }
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = allowJoinAfterStart, onCheckedChange = { allowJoinAfterStart = it })
-                    Text("Iscrizione dopo inizio", style = MaterialTheme.typography.bodySmall)
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = allowMatchesAfterEnd, onCheckedChange = { allowMatchesAfterEnd = it })
-                    Text("Partite dopo fine", style = MaterialTheme.typography.bodySmall)
-                }
+                )
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-                Text("Importazione Dati", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Switch(checked = copyPlayers, onCheckedChange = { copyPlayers = it }, modifier = Modifier.scale(0.8f))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Copia giocatori", style = MaterialTheme.typography.bodySmall)
-                }
-
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Switch(checked = copyTeams, onCheckedChange = { copyTeams = it }, modifier = Modifier.scale(0.8f))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Copia squadre", style = MaterialTheme.typography.bodySmall)
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Switch(checked = createChampionship, onCheckedChange = { createChampionship = it }, modifier = Modifier.scale(0.8f))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Crea Campionato", style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text("Copia Squadre", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        Text("Importa le squadre della stagione precedente", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         },
@@ -712,19 +650,13 @@ fun CreateSeasonDialog(onDismiss: () -> Unit, onConfirm: (CreateSeasonRequest) -
                     onConfirm(
                         CreateSeasonRequest(
                             name = name,
-                            startDate = LocalDate.now().toString(),
-                            endDate = LocalDate.now().plusMonths(3).toString(),
-                            targetScore = targetScore.toIntOrNull() ?: 10,
-                            cappottoEnabled = cappottoEnabled,
-                            cappottoBonus = cappottoBonus.toIntOrNull() ?: 2,
-                            allowJoinAfterStart = allowJoinAfterStart,
-                            allowMatchesAfterEnd = allowMatchesAfterEnd,
-                            copyPlayersFromPreviousSeason = copyPlayers,
-                            copyTeamsFromPreviousSeason = copyTeams,
-                            createChampionship = createChampionship
+                            startDate = DateUtils.toIsoDate(startDate),
+                            endDate = DateUtils.toIsoDate(endDate),
+                            copyTeamsFromPreviousSeason = copyTeams
                         )
                     )
                 },
+                enabled = name.isNotBlank() && startDate.isNotBlank() && endDate.isNotBlank(),
                 shape = MaterialTheme.shapes.large
             ) { Text("Crea Stagione") }
         },

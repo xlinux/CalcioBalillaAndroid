@@ -19,10 +19,17 @@ data class RegisterRequest(
 
 @Serializable
 data class AuthResponse(
-    val token: String? = null, // Changed from accessToken
+    val token: String? = null,
+    val jwt: String? = null, // Keep for backward compatibility if needed temporarily
+    val refreshToken: String? = null,
     val userId: Long,
-    val name: String? = null, // Changed from username
+    val name: String? = null,
     val email: String? = null
+)
+
+@Serializable
+data class RefreshRequest(
+    val refreshToken: String
 )
 
 @Serializable
@@ -73,7 +80,7 @@ data class LeagueMemberResponse(
     val username: String,
     val email: String? = null,
     val avatar: String? = null,
-    val role: String
+    val role: String = "PLAYER"
 )
 
 @Serializable
@@ -109,12 +116,7 @@ data class SeasonResponse( // Renamed from Season
     val name: String,
     val startDate: String,
     val endDate: String,
-    val active: Boolean? = null,
-    val targetScore: Int,
-    val cappottoEnabled: Boolean,
-    val cappottoBonus: Int,
-    val allowJoinAfterStart: Boolean,
-    val allowMatchesAfterEnd: Boolean
+    val active: Boolean? = null
 )
 
 @Serializable
@@ -124,7 +126,24 @@ data class CompetitionResponse(
     val name: String,
     val type: String? = null,
     val status: String? = null,
+    val active: Boolean? = null,
+    val startDate: String? = null,
+    val endDate: String? = null,
     val rankingMode: String = "BOTH",
+    val matchType: String = "DOUBLE",
+    val competitionRankingType: String = "POINTS",
+    val sportId: Long? = null,
+    val sportName: String? = null,
+    val targetScore: Int? = null,
+    val useTargetScore: Boolean = false,
+    val allowDraw: Boolean = false,
+    val winPoints: Int = 3,
+    val drawPoints: Int = 1,
+    val lossPoints: Int = 0,
+    val cappottoEnabled: Boolean = true,
+    val cappottoBonusPoints: Int = 2,
+    val matchFormat: String = "POINTS",
+    val homeAndAway: Boolean = false,
     val currentUserJoined: Boolean = false
 )
 
@@ -133,24 +152,67 @@ data class CreateSeasonRequest(
     val name: String,
     val startDate: String,
     val endDate: String,
-    val targetScore: Int,
-    val cappottoEnabled: Boolean,
-    val cappottoBonus: Int,
-    val allowJoinAfterStart: Boolean,
-    val allowMatchesAfterEnd: Boolean,
-    val copyPlayersFromPreviousSeason: Boolean = false,
-    val copyTeamsFromPreviousSeason: Boolean = false,
-    val createChampionship: Boolean = false
+    val copyTeamsFromPreviousSeason: Boolean = false
 )
 
 @Serializable
 data class CreateCompetitionRequest(
     val name: String,
     val type: String,
-    val rankingMode: String = "BOTH",
+    val startDate: String? = null,
+    val endDate: String? = null,
     val copyFromCompetitionId: Long? = null,
     val copyParticipants: Boolean = false,
-    val copyTeams: Boolean = false
+    val copyTeams: Boolean = false,
+    val rankingMode: String = "BOTH",
+    val matchType: String = "DOUBLE",
+    val competitionRankingType: String = "POINTS",
+    val sportId: Long,
+    val joinCreator: Boolean = false,
+    val targetScore: Int? = null,
+    val useTargetScore: Boolean = false,
+    val allowDraw: Boolean = false,
+    val winPoints: Int = 3,
+    val drawPoints: Int = 1,
+    val lossPoints: Int = 0,
+    val cappottoEnabled: Boolean = true,
+    val cappottoBonusPoints: Int = 2,
+    val matchFormat: String = "POINTS",
+    val homeAndAway: Boolean = false
+)
+
+@Serializable
+data class CompetitionTemplateResponse(
+    val sportId: Long,
+    val sportName: String,
+    val competitionName: String,
+    val type: String,
+    val rankingMode: String,
+    val matchType: String,
+    val competitionRankingType: String,
+    val matchFormat: String,
+    val targetScore: Int? = null,
+    val useTargetScore: Boolean = false,
+    val allowDraw: Boolean = false,
+    val winPoints: Int = 3,
+    val drawPoints: Int = 0,
+    val lossPoints: Int = 0,
+    val cappottoEnabled: Boolean = false,
+    val cappottoBonusPoints: Int = 0,
+    val homeAndAway: Boolean = false
+)
+
+// --- Sport ---
+
+@Serializable
+data class SportResponse(
+    val id: Long,
+    val name: String,
+    val description: String? = null,
+    val active: Boolean,
+    val rankingEnabled: Boolean,
+    val rankingType: String,
+    val sportMode: String
 )
 
 // --- Squadre ---
@@ -159,12 +221,15 @@ data class CreateCompetitionRequest(
 data class TeamResponse( // Renamed from Team
     val id: Long,
     val seasonId: Long? = null,
+    val competitionId: Long? = null,
     val name: String,
-    val playerAId: Long,
+    val playerAId: Long? = null,
     val playerAUsername: String? = null,
-    val playerBId: Long,
+    val playerBId: Long? = null,
     val playerBUsername: String? = null,
+    val inviteCode: String? = null,
     val rating: Int? = null,
+    val points: Int? = null,
     val goalsFor: Int? = null,
     val goalsAgainst: Int? = null,
     val matchesPlayed: Int? = null,
@@ -175,8 +240,24 @@ data class TeamResponse( // Renamed from Team
 @Serializable
 data class CreateTeamRequest(
     val name: String,
-    val playerAId: Long,
-    val playerBId: Long
+    val playerAId: Long? = null,
+    val playerBId: Long? = null
+)
+
+@Serializable
+data class TeamMemberResponse(
+    val id: Long? = null,
+    val teamId: Long? = null,
+    val userId: Long? = null,
+    val username: String? = null,
+    val role: String? = null // OWNER, PLAYER
+)
+
+@Serializable
+data class JoinTeamResponse(
+    val teamId: Long,
+    val teamName: String,
+    val role: String
 )
 
 // --- Partite ---
@@ -221,7 +302,7 @@ data class GenerateRandomMatchesRequest( // Renamed from RandomMatchesRequest
 @Serializable
 data class PlayerRankingResponse( // Renamed from PlayerRanking
     val userId: Long,
-    val username: String,
+    val username: String? = null,
     val rating: Int,
     val goalsFor: Int,
     val goalsAgainst: Int,
@@ -234,14 +315,19 @@ data class PlayerRankingResponse( // Renamed from PlayerRanking
 data class TeamRankingResponse( // Renamed from TeamRanking
     val teamId: Long,
     val teamName: String,
-    val playerAUsername: String,
-    val playerBUsername: String,
+    val playerAUsername: String? = null,
+    val playerBUsername: String? = null,
     val rating: Int,
     val goalsFor: Int,
     val goalsAgainst: Int,
     val matchesPlayed: Int,
-    val cappottiGiven: Int,
-    val cappottiReceived: Int
+    val wins: Int = 0,
+    val draws: Int = 0,
+    val losses: Int = 0,
+    val points: Int = 0,
+    val goalDifference: Int = 0,
+    val cappottiGiven: Int? = null,
+    val cappottiReceived: Int? = null
 )
 
 @Serializable
@@ -260,7 +346,9 @@ data class TeamStatsResponse(
     val rating: Int,
     val matchesPlayed: Int,
     val wins: Int,
+    val draws: Int = 0,
     val losses: Int,
+    val points: Int = 0,
     val goalsFor: Int,
     val goalsAgainst: Int,
     val goalDifference: Int,

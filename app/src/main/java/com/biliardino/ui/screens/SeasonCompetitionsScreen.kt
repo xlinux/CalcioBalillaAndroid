@@ -1,27 +1,31 @@
 package com.biliardino.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowCircleRight
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.MilitaryTech
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.biliardino.model.CompetitionResponse
-import com.biliardino.model.CreateCompetitionRequest
 import com.biliardino.model.LeagueResponse
 import com.biliardino.model.SeasonResponse
+import com.biliardino.ui.Screen
+import com.biliardino.util.DateUtils
 import com.biliardino.viewmodel.AppViewModel
 import com.biliardino.viewmodel.UiState
 
@@ -33,7 +37,6 @@ fun SeasonCompetitionsScreen(
     vm: AppViewModel
 ) {
     var competitionToJoin by remember { mutableStateOf<CompetitionResponse?>(null) }
-    var showCreateDialog by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
@@ -77,11 +80,9 @@ fun SeasonCompetitionsScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     item {
-                        Text(
-                            text = "Competizioni Disponibili",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            modifier = Modifier.padding(bottom = 8.dp)
+                        LeagueSectionHeader(
+                            title = "Competizioni disponibili",
+                            count = s.competitions.size
                         )
                     }
                     items(s.competitions) { competition ->
@@ -103,7 +104,7 @@ fun SeasonCompetitionsScreen(
         if (s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER") {
             if (season.active != false) {
                 FloatingActionButton(
-                    onClick = { showCreateDialog = true },
+                    onClick = { vm.navigateTo(Screen.CreateCompetition(league, season)) },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(16.dp),
@@ -116,31 +117,38 @@ fun SeasonCompetitionsScreen(
         }
     }
 
-    if (showCreateDialog) {
-        CreateCompetitionDialog(
-            competitions = s.competitions,
-            onDismiss = { showCreateDialog = false },
-            onConfirm = { request ->
-                vm.createCompetition(league, season, request)
-                showCreateDialog = false
-            }
-        )
-    }
-
     if (competitionToJoin != null) {
+        val isAdminOrOwner = s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER"
+        
         AlertDialog(
             onDismissRequest = { competitionToJoin = null },
             title = { Text("Partecipa alla Competizione", fontWeight = FontWeight.Bold) },
             text = { Text("Vuoi iscriverti alla competizione \"${competitionToJoin?.name}\" per iniziare a registrare le tue partite?") },
             confirmButton = {
+                if (isAdminOrOwner) {
+                    TextButton(
+                        onClick = {
+                            competitionToJoin?.let { vm.selectCompetition(league, season, it) }
+                            competitionToJoin = null
+                        }
+                    ) {
+                        Text("Entra come Admin")
+                    }
+                }
                 Button(
                     onClick = {
-                        competitionToJoin?.let { vm.joinCompetition(league, season, it.id) }
+                        competitionToJoin?.let { comp ->
+                            if (comp.matchType == "TEAM") {
+                                vm.navigateTo(Screen.JoinTeam(league, season, comp))
+                            } else {
+                                vm.joinCompetition(league, season, comp.id)
+                            }
+                        }
                         competitionToJoin = null
                     },
                     shape = MaterialTheme.shapes.large
                 ) {
-                    Text("Partecipa Ora")
+                    Text("Partecipa")
                 }
             },
             dismissButton = {
@@ -153,282 +161,111 @@ fun SeasonCompetitionsScreen(
 }
 
 @Composable
-fun CreateCompetitionDialog(
-    competitions: List<CompetitionResponse>,
-    onDismiss: () -> Unit,
-    onConfirm: (CreateCompetitionRequest) -> Unit
-) {
-    var name by remember { mutableStateOf("") }
-    val types = listOf("LEAGUE", "CUP")
-    var selectedType by remember { mutableStateOf(types[0]) }
-    val rankingModes = listOf(
-        Triple("PLAYER", "Classifica giocatori", "Mostra solo la classifica dei giocatori"),
-        Triple("TEAM", "Classifica squadre", "Mostra solo la classifica delle squadre"),
-        Triple("BOTH", "Entrambe", "Mostra entrambe le classifiche")
-    )
-    var selectedRankingMode by remember { mutableStateOf("BOTH") }
-
-    var copyParticipants by remember { mutableStateOf(false) }
-    var copyTeams by remember { mutableStateOf(false) }
-    var sourceCompetitionId by remember { mutableStateOf<Long?>(null) }
-    var dropdownExpanded by remember { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Nuova Competizione", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Nome Competizione") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.large
-                )
-                
-                Column {
-                    Text("Tipologia di Evento", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.height(8.dp))
-                    types.forEach { type ->
-                        val isSelected = selectedType == type
-                        Surface(
-                            onClick = { selectedType = type },
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            shape = MaterialTheme.shapes.medium,
-                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-                            )
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(12.dp)
-                            ) {
-                                RadioButton(selected = isSelected, onClick = null)
-                                Spacer(Modifier.width(12.dp))
-                                Column {
-                                    Text(
-                                        text = if (type == "LEAGUE") "Campionato" else "Torneo",
-                                        fontWeight = FontWeight.Bold,
-                                        style = MaterialTheme.typography.bodyLarge
-                                    )
-                                    Text(
-                                        text = if (type == "LEAGUE") "Partite tutti contro tutti con classifica" else "Scontri diretti a eliminazione",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Column {
-                    Text("Classifiche", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.height(8.dp))
-                    rankingModes.forEach { (mode, title, description) ->
-                        val isSelected = selectedRankingMode == mode
-                        Surface(
-                            onClick = { selectedRankingMode = mode },
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            shape = MaterialTheme.shapes.medium,
-                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-                            )
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(12.dp)
-                            ) {
-                                RadioButton(selected = isSelected, onClick = null)
-                                Spacer(Modifier.width(12.dp))
-                                Column {
-                                    Text(
-                                        text = title,
-                                        fontWeight = FontWeight.Bold,
-                                        style = MaterialTheme.typography.bodyLarge
-                                    )
-                                    Text(
-                                        text = description,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                HorizontalDivider()
-
-                Column {
-                    Text("Copia Dati (Opzionale)", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = copyParticipants,
-                            onCheckedChange = {
-                                copyParticipants = it
-                                if (!it) copyTeams = false
-                            }
-                        )
-                        Text("Copia partecipanti", style = MaterialTheme.typography.bodyMedium)
-                    }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = copyTeams,
-                            onCheckedChange = {
-                                copyTeams = it
-                                if (it) copyParticipants = true
-                            }
-                        )
-                        Text("Copia squadre", style = MaterialTheme.typography.bodyMedium)
-                    }
-
-                    if (copyParticipants || copyTeams) {
-                        Spacer(Modifier.height(8.dp))
-                        Box(Modifier.fillMaxWidth()) {
-                            OutlinedButton(
-                                onClick = { dropdownExpanded = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = MaterialTheme.shapes.medium
-                            ) {
-                                val sourceName = competitions.find { it.id == sourceCompetitionId }?.name ?: "Seleziona competizione sorgente"
-                                Text(sourceName)
-                            }
-                            DropdownMenu(
-                                expanded = dropdownExpanded,
-                                onDismissRequest = { dropdownExpanded = false },
-                                modifier = Modifier.fillMaxWidth(0.8f)
-                            ) {
-                                competitions.forEach { comp ->
-                                    DropdownMenuItem(
-                                        text = { Text(comp.name) },
-                                        onClick = {
-                                            sourceCompetitionId = comp.id
-                                            dropdownExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            val isReady = name.isNotBlank() && (!copyParticipants || sourceCompetitionId != null)
-            Button(
-                onClick = {
-                    onConfirm(
-                        CreateCompetitionRequest(
-                            name = name,
-                            type = selectedType,
-                            rankingMode = selectedRankingMode,
-                            copyFromCompetitionId = sourceCompetitionId,
-                            copyParticipants = copyParticipants,
-                            copyTeams = copyTeams
-                        )
-                    )
-                },
-                enabled = isReady,
-                shape = MaterialTheme.shapes.large
-            ) {
-                Text("Crea Competizione")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Annulla")
-            }
-        }
-    )
-}
-
-@Composable
 fun CompetitionCard(competition: CompetitionResponse, onClick: () -> Unit) {
     val isLeague = competition.type == "LEAGUE"
-    val isActive = competition.status == "ACTIVE" || competition.status == null
+    val isActive = competition.active ?: (competition.status == "ACTIVE" || competition.status == null)
+    val typeLabel = if (isLeague) "Campionato" else "Torneo"
+    val rankingLabel = when (competition.rankingMode) {
+        "PLAYER" -> "Giocatori"
+        "TEAM" -> "Squadre"
+        else -> "Entrambe"
+    }
+    val accentColor = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+    val actionColor = if (competition.currentUserJoined) accentColor else Color(0xFFF57C00)
 
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+            containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, accentColor.copy(alpha = if (isActive) 0.22f else 0.14f))
     ) {
-        Row(
-            Modifier.padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                modifier = Modifier.size(56.dp),
-                shape = MaterialTheme.shapes.large,
-                color = if (isLeague) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.tertiaryContainer
+        Column(Modifier.padding(14.dp)) {
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(
-                    imageVector = if (isLeague) Icons.Default.Groups else Icons.Default.MilitaryTech,
-                    contentDescription = null,
-                    modifier = Modifier.padding(14.dp).fillMaxSize(),
-                    tint = if (isLeague) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onTertiaryContainer
-                )
+                Surface(
+                    modifier = Modifier.size(48.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    color = accentColor.copy(alpha = 0.14f)
+                ) {
+                    Icon(
+                        imageVector = if (isLeague) Icons.Default.Groups else Icons.Default.MilitaryTech,
+                        contentDescription = null,
+                        modifier = Modifier.padding(12.dp).fillMaxSize(),
+                        tint = accentColor
+                    )
+                }
+
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text(
+                            text = competition.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        CompetitionStatusChip(isActive)
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CompetitionInfoChip(typeLabel, accentColor)
+                        CompetitionInfoChip(rankingLabel, MaterialTheme.colorScheme.tertiary)
+                    }
+                }
             }
 
-            Spacer(Modifier.width(20.dp))
-
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = competition.name,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val typeLabel = if (isLeague) "Campionato" else "Torneo"
-                    Text(
-                        text = typeLabel,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
+            if (!competition.startDate.isNullOrBlank() || !competition.endDate.isNullOrBlank()) {
+                Spacer(Modifier.height(14.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    CompetitionDatePill(
+                        label = "Inizio",
+                        value = competition.startDate,
+                        modifier = Modifier.weight(1f)
                     )
-                    Text(
-                        text = " • ",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                    Text(
-                        text = if (isActive) "In corso" else "Concluso",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (isActive) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
+                    CompetitionDatePill(
+                        label = "Fine",
+                        value = competition.endDate,
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
 
-            if (competition.currentUserJoined) {
-                Surface(
-                    color = MaterialTheme.colorScheme.successContainer,
-                    shape = androidx.compose.foundation.shape.CircleShape
-                ) {
-                    Text(
-                        text = "ISCRITTO",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                        style = androidx.compose.ui.text.TextStyle(
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.onSuccessContainer
-                        )
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    if (competition.currentUserJoined) Icons.Default.ArrowCircleRight else Icons.Default.PersonAdd,
+                    contentDescription = null,
+                    tint = actionColor,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    if (competition.currentUserJoined) "Apri campionato" else "Tocca per partecipare",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = actionColor
+                )
+                Spacer(Modifier.weight(1f))
+                if (!competition.currentUserJoined) {
+                    CompetitionNotJoinedChip()
+                } else {
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -436,6 +273,92 @@ fun CompetitionCard(competition: CompetitionResponse, onClick: () -> Unit) {
     }
 }
 
-// Add successContainer to colorScheme extensions if not present, or use a hardcoded value
-val ColorScheme.successContainer: Color get() = Color(0xFFC8E6C9)
-val ColorScheme.onSuccessContainer: Color get() = Color(0xFF2E7D32)
+@Composable
+private fun CompetitionInfoChip(text: String, color: Color) {
+    Surface(
+        color = color.copy(alpha = 0.12f),
+        shape = androidx.compose.foundation.shape.CircleShape
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun CompetitionStatusChip(isActive: Boolean) {
+    Surface(
+        color = if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
+        shape = MaterialTheme.shapes.small
+    ) {
+        Text(
+            text = if (isActive) "In corso" else "Concluso",
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun CompetitionNotJoinedChip() {
+    Surface(
+        color = Color(0xFFF57C00).copy(alpha = 0.14f),
+        shape = androidx.compose.foundation.shape.CircleShape
+    ) {
+        Text(
+            text = "Non iscritto",
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = Color(0xFFF57C00),
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun CompetitionDatePill(label: String, value: String?, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.CalendarMonth,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    DateUtils.formatDate(value),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
