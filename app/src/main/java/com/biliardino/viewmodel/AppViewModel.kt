@@ -618,6 +618,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
     }
 
+    fun generateCalendar(competitionId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.competitions.generateCalendar(competitionId) }
+            .onSuccess {
+                _state.value = _state.value.copy(
+                    successMessage = "Calendario generato con successo!",
+                    loading = false
+                )
+                // Refresh data
+                loadCompetitionMatches(competitionId)
+                loadRankings(competitionId)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore generazione calendario: ${e.getErrorMessage()}")
+            }
+    }
+
     fun closeLeague(leagueId: Long) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.leagues.closeLeague(leagueId) }
@@ -694,6 +711,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             .onFailure { e ->
                 _state.value = _state.value.copy(loading = false, error = "Errore eliminazione partita: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun updateMatchResult(competitionId: Long, matchId: Long, scoreA: Int, scoreB: Int) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.matches.updateMatchResult(matchId, UpdateMatchResultRequest(scoreA, scoreB)) }
+            .onSuccess {
+                _state.value = _state.value.copy(successMessage = "Risultato aggiornato!", loading = false)
+                loadCompetitionMatches(competitionId)
+                loadRankings(competitionId)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore aggiornamento risultato: ${e.getErrorMessage()}")
             }
     }
 

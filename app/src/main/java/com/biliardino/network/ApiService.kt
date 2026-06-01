@@ -147,6 +147,9 @@ interface CompetitionApi {
     @POST("competitions/{competitionId}/recalculate")
     suspend fun recalculateCompetition(@Path("competitionId") competitionId: Long)
 
+    @POST("competitions/{competitionId}/calendar/generate")
+    suspend fun generateCalendar(@Path("competitionId") competitionId: Long)
+
     @GET("competitions/{competitionId}/teams/{teamId}/statistics")
     suspend fun getTeamStatistics(
         @Path("competitionId") competitionId: Long,
@@ -182,4 +185,7 @@ interface CompetitionApi {
 interface MatchApi {
     @POST("stagioni/{seasonId}/partite/random")
     suspend fun generateRandomMatches(@Path("seasonId") seasonId: Long, @Body request: GenerateRandomMatchesRequest): List<MatchResponse>
+
+    @PUT("competitions/matches/{matchId}/result")
+    suspend fun updateMatchResult(@Path("matchId") matchId: Long, @Body request: UpdateMatchResultRequest): MatchResponse
 }

@@ -36,7 +36,9 @@ fun CreateCompetitionScreen(
     var selectedRankingMode by remember { mutableStateOf("BOTH") }
     var selectedMatchType by remember { mutableStateOf("SINGLE") }
     var selectedCompRankingType by remember { mutableStateOf("POINTS") }
-    var selectedMatchFormat by remember { mutableStateOf("SETS") }
+    var selectedMatchFormat by remember { mutableStateOf("POINTS") }
+    var winByTwo by remember { mutableStateOf(false) }
+    var matchCreationMode by remember { mutableStateOf("FREE") }
     var selectedSportId by remember { mutableStateOf<Long?>(null) }
     var joinCreator by remember { mutableStateOf(false) }
     var useTargetScore by remember { mutableStateOf(false) }
@@ -62,6 +64,8 @@ fun CreateCompetitionScreen(
         selectedMatchType = template.matchType
         selectedCompRankingType = template.competitionRankingType
         selectedMatchFormat = template.matchFormat
+        winByTwo = false // Default
+        matchCreationMode = if (template.type == "LEAGUE") "SCHEDULED" else "FREE"
         targetScore = (template.targetScore ?: targetScore).coerceAtLeast(1)
         useTargetScore = template.useTargetScore
         allowDraw = template.allowDraw
@@ -154,9 +158,16 @@ fun CreateCompetitionScreen(
 
             OptionRow(
                 label = "Formato partita",
-                options = listOf("POINTS" to "A punti", "SETS" to "A set"),
+                options = listOf("POINTS" to "A punti", "SETS" to "A set", "GOALS" to "Gol"),
                 selected = selectedMatchFormat,
                 onSelected = { selectedMatchFormat = it }
+            )
+
+            OptionRow(
+                label = "Creazione partite",
+                options = listOf("FREE" to "Libera", "SCHEDULED" to "Calendario"),
+                selected = matchCreationMode,
+                onSelected = { matchCreationMode = it }
             )
 
             ToggleLine("Partecipo anche io", joinCreator) { joinCreator = it }
@@ -164,6 +175,7 @@ fun CreateCompetitionScreen(
 
         CreationSectionCard("Punti classifica") {
             ToggleLine("Consenti pareggio", allowDraw) { allowDraw = it }
+            ToggleLine("Vittoria con scarto 2", winByTwo) { winByTwo = it }
             if (selectedCompRankingType == "POINTS") {
                 NumberStepperLine("Punti vittoria", winPoints, 0..100) { winPoints = it }
                 if (allowDraw) {
@@ -281,6 +293,8 @@ fun CreateCompetitionScreen(
                         cappottoEnabled = cappottoEnabled,
                         cappottoBonusPoints = if (cappottoEnabled) cappottoBonusPoints else 0,
                         matchFormat = selectedMatchFormat,
+                        winByTwo = winByTwo,
+                        matchCreationMode = matchCreationMode,
                         homeAndAway = homeAndAway
                     )
                 )

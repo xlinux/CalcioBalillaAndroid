@@ -143,8 +143,10 @@ data class CompetitionResponse(
     val cappottoEnabled: Boolean = true,
     val cappottoBonusPoints: Int = 2,
     val matchFormat: String = "POINTS",
+    val winByTwo: Boolean = false,
     val homeAndAway: Boolean = false,
-    val currentUserJoined: Boolean = false
+    val currentUserJoined: Boolean = false,
+    val matchCreationMode: String = "FREE"
 )
 
 @Serializable
@@ -178,6 +180,8 @@ data class CreateCompetitionRequest(
     val cappottoEnabled: Boolean = true,
     val cappottoBonusPoints: Int = 2,
     val matchFormat: String = "POINTS",
+    val winByTwo: Boolean = false,
+    val matchCreationMode: String = "FREE",
     val homeAndAway: Boolean = false
 )
 
@@ -271,8 +275,8 @@ data class MatchResponse( // Renamed from Match
     val teamAName: String? = null,
     val teamBId: Long,
     val teamBName: String? = null,
-    val scoreA: Int,
-    val scoreB: Int,
+    val scoreA: Int? = null,
+    val scoreB: Int? = null,
     val playedAt: String? = null,
     val cappotto: Boolean? = null,
     val cappottoBonusApplied: Int? = null,
@@ -288,6 +292,12 @@ data class MatchResponse( // Renamed from Match
 data class CreateDoubleMatchRequest( // Renamed from CreateMatchRequest
     val teamAId: Long,
     val teamBId: Long,
+    val scoreA: Int,
+    val scoreB: Int
+)
+
+@Serializable
+data class UpdateMatchResultRequest(
     val scoreA: Int,
     val scoreB: Int
 )

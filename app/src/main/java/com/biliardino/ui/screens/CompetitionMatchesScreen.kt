@@ -52,7 +52,8 @@ fun CompetitionMatchesScreen(league: LeagueResponse, season: SeasonResponse, com
                             matches = s.seasonMatches,
                             teams = s.seasonTeams,
                             isAdmin = isAdmin,
-                            onDeleteMatch = { matchId -> vm.deleteMatch(competition.id, matchId) }
+                            onDeleteMatch = { matchId -> vm.deleteMatch(competition.id, matchId) },
+                            onUpdateResult = { matchId, sA, sB -> vm.updateMatchResult(competition.id, matchId, sA, sB) }
                         )
                     }
                 }

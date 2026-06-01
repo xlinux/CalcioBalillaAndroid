@@ -80,7 +80,8 @@ fun TeamDetailScreen(league: LeagueResponse, season: SeasonResponse, competition
                         matches = s.currentTeamMatches,
                         teams = s.seasonTeams,
                         isAdmin = isAdmin,
-                        onDeleteMatch = { matchId -> vm.deleteMatch(competition.id, matchId) }
+                        onDeleteMatch = { matchId -> vm.deleteMatch(competition.id, matchId) },
+                        onUpdateResult = { matchId, sA, sB -> vm.updateMatchResult(competition.id, matchId, sA, sB) }
                     )
                 }
                 2 -> TeamCompareView(competition, team, s.seasonTeams, s.currentTeamHeadToHead, vm)

@@ -2,6 +2,7 @@ package com.biliardino.ui.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -27,7 +28,8 @@ fun MatchList(
     matches: List<MatchResponse>,
     teams: List<TeamResponse>,
     isAdmin: Boolean = false,
-    onDeleteMatch: ((Long) -> Unit)? = null
+    onDeleteMatch: ((Long) -> Unit)? = null,
+    onUpdateResult: ((Long, Int, Int) -> Unit)? = null
 ) {
     val groupedMatches = remember(matches) {
         matches.sortedByDescending { it.playedAt ?: "" }
@@ -67,7 +69,7 @@ fun MatchList(
                 )
             }
             items(matchesInGroup) { match ->
-                MatchItem(match, teams, isAdmin, onDeleteMatch)
+                MatchItem(match, teams, isAdmin, onDeleteMatch, onUpdateResult)
                 Spacer(Modifier.height(12.dp))
             }
         }
@@ -79,20 +81,26 @@ fun MatchItem(
     match: MatchResponse,
     teams: List<TeamResponse>,
     isAdmin: Boolean = false,
-    onDeleteMatch: ((Long) -> Unit)? = null
+    onDeleteMatch: ((Long) -> Unit)? = null,
+    onUpdateResult: ((Long, Int, Int) -> Unit)? = null
 ) {
     val teamA = teams.find { it.id == match.teamAId }
     val teamB = teams.find { it.id == match.teamBId }
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showResultDialog by remember { mutableStateOf(false) }
 
     val playerA1 = teamA?.playerAUsername
     val playerA2 = teamA?.playerBUsername
     val playerB1 = teamB?.playerAUsername
     val playerB2 = teamB?.playerBUsername
 
+    val isPlayed = match.scoreA != null && match.scoreB != null
+
     ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !isPlayed && onUpdateResult != null) { showResultDialog = true },
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(Modifier.padding(12.dp)) {
@@ -131,7 +139,7 @@ fun MatchItem(
                     
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "${match.scoreA}",
+                        text = match.scoreA?.toString() ?: "-",
                         style = MaterialTheme.typography.displayMedium,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -209,7 +217,7 @@ fun MatchItem(
 
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "${match.scoreB}",
+                        text = match.scoreB?.toString() ?: "-",
                         style = MaterialTheme.typography.displayMedium,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -249,5 +257,72 @@ fun MatchItem(
                 }
             }
         )
+    }
+
+    if (showResultDialog && onUpdateResult != null) {
+        MatchResultDialog(
+            match = match,
+            onDismiss = { showResultDialog = false },
+            onConfirm = { sA, sB ->
+                onUpdateResult(match.id, sA, sB)
+                showResultDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+fun MatchResultDialog(
+    match: MatchResponse,
+    onDismiss: () -> Unit,
+    onConfirm: (Int, Int) -> Unit
+) {
+    var scoreA by remember { mutableIntStateOf(0) }
+    var scoreB by remember { mutableIntStateOf(0) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Inserisci Risultato", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("${match.teamAName} vs ${match.teamBName}", style = MaterialTheme.typography.bodyMedium)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ScorePicker(scoreA) { scoreA = it }
+                    Text("-", style = MaterialTheme.typography.headlineLarge)
+                    ScorePicker(scoreB) { scoreB = it }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(scoreA, scoreB) }) {
+                Text("Salva")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Annulla")
+            }
+        }
+    )
+}
+
+@Composable
+private fun ScorePicker(value: Int, onValueChange: (Int) -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        IconButton(onClick = { onValueChange(value + 1) }) {
+            Text("+", style = MaterialTheme.typography.titleLarge)
+        }
+        Text(
+            text = value.toString(),
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Bold
+        )
+        IconButton(onClick = { if (value > 0) onValueChange(value - 1) }) {
+            Text("-", style = MaterialTheme.typography.titleLarge)
+        }
     }
 }

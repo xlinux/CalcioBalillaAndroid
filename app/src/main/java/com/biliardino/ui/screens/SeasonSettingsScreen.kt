@@ -19,9 +19,11 @@ import com.biliardino.viewmodel.UiState
 @Composable
 fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competition: CompetitionResponse?, s: UiState, vm: AppViewModel) {
     var showCloseCompetitionConfirmation by remember { mutableStateOf(false) }
+    var showGenerateDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         vm.loadSeasonStatsData(league.id, season.id, competition?.id)
+        competition?.id?.let { vm.loadCompetitionMatches(it) }
     }
 
     Column(
@@ -44,7 +46,8 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                     "Nome" to competition.name,
                     "Sport" to (competition.sportName ?: "Calcio Balilla"),
                     "Tipo" to if (competition.type == "LEAGUE") "Campionato" else "Torneo",
-                    "Modalità" to when(competition.matchType) {
+                    "Modalità Creazione" to competition.matchCreationMode,
+                    "Modalità Match" to when(competition.matchType) {
                         "SINGLE" -> "Singolo (1vs1)"
                         "DOUBLE" -> "Doppio (2vs2)"
                         "TEAM" -> "Squadra"
@@ -114,6 +117,42 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                         fontWeight = FontWeight.Bold
                     )
                 }
+
+                if (competition.matchCreationMode == "SCHEDULED" && competition.type == "LEAGUE") {
+                    Spacer(Modifier.height(8.dp))
+                    val canGenerate = competition.active != false &&
+                            s.seasonTeams.size >= 2 &&
+                            s.seasonMatches.isEmpty()
+
+                    Button(
+                        onClick = { showGenerateDialog = true },
+                        enabled = canGenerate,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Text(
+                            "GENERA CALENDARIO",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    if (s.seasonMatches.isNotEmpty()) {
+                        Text(
+                            "Calendario già generato.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    } else if (s.seasonTeams.size < 2) {
+                        Text(
+                            "Servono almeno 2 squadre.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
             }
         }
 
@@ -135,13 +174,6 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                         fontWeight = FontWeight.Bold
                     )
                 }
-                Text(
-                    "Rielabora tutte le partite della competizione per aggiornare correttamente le classifiche.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
                 
                 Spacer(Modifier.height(12.dp))
 
@@ -157,16 +189,30 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                         fontWeight = FontWeight.Bold
                     )
                 }
-                Text(
-                    "Attenzione: chiudere la competizione è un'operazione irreversibile.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
                 Spacer(Modifier.height(16.dp))
             }
         }
+    }
+
+    if (showGenerateDialog && competition != null) {
+        AlertDialog(
+            onDismissRequest = { showGenerateDialog = false },
+            title = { Text("Genera Calendario") },
+            text = { Text("Sei sicuro di voler generare il calendario delle partite? Questa azione creerà tutti gli incontri previsti e non potrà essere annullata.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.generateCalendar(competition.id)
+                    showGenerateDialog = false
+                }) {
+                    Text("GENERA")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showGenerateDialog = false }) {
+                    Text("ANNULLA")
+                }
+            }
+        )
     }
 
     if (showCloseCompetitionConfirmation && competition != null) {
