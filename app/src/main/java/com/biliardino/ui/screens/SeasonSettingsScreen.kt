@@ -47,6 +47,7 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                     "Sport" to (competition.sportName ?: "Calcio Balilla"),
                     "Tipo" to if (competition.type == "LEAGUE") "Campionato" else "Torneo",
                     "Modalità Creazione" to competition.matchCreationMode,
+                    "Generazione Calendario" to if (competition.calendarGenerationMode == "ROUNDS") "A giornate" else "Sequenziale",
                     "Modalità Match" to when(competition.matchType) {
                         "SINGLE" -> "Singolo (1vs1)"
                         "DOUBLE" -> "Doppio (2vs2)"

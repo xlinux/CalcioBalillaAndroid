@@ -98,15 +98,58 @@ fun SeasonTeamsScreen(league: LeagueResponse, season: SeasonResponse, competitio
                     }
                 }
 
-                FloatingActionButton(
-                    onClick = { showCreateForm = true },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(24.dp),
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Crea Squadra")
+                val isAdmin = s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER"
+                val isJoined = competition.currentUserJoined
+                val isTeamType = competition.matchType == "TEAM"
+                val isDouble = competition.matchType == "DOUBLE"
+                val isSingle = competition.matchType == "SINGLE"
+                val hasMatches = s.seasonMatches.isNotEmpty()
+                
+                // Logic for showing Create Team button
+                val showCreateButton = when {
+                    // Competition must be active
+                    competition.status != "ACTIVE" && competition.status != null -> false
+                    // If matches already exist in a scheduled competition, no more teams/entries allowed
+                    competition.matchCreationMode == "SCHEDULED" && hasMatches -> false
+                    // TEAM: Show only if user not already in a team
+                    isTeamType -> {
+                        val currentUserId = s.currentUser?.userId
+                        val isUserInAnyTeam = s.seasonTeams.any { team -> 
+                            team.playerAId == currentUserId || team.playerBId == currentUserId
+                        }
+                        !isUserInAnyTeam
+                    }
+                    // DOUBLE/SINGLE + SCHEDULED: allowed before calendar generation
+                    (isDouble || isSingle) && competition.matchCreationMode == "SCHEDULED" -> true
+                    // DOUBLE/SINGLE + FREE: entries are created during match registration, no need for "Create Team" tab button
+                    else -> false
+                }
+
+                val fabLabel = when {
+                    isTeamType -> "Crea Squadra"
+                    isDouble -> "Aggiungi Coppia"
+                    isSingle -> "Aggiungi Giocatore"
+                    else -> "Crea Squadra"
+                }
+
+                if (showCreateButton && (isAdmin || isJoined)) {
+                    FloatingActionButton(
+                        onClick = { showCreateForm = true },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(24.dp),
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(fabLabel)
+                        }
+                    }
                 }
             }
         }

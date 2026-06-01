@@ -52,6 +52,8 @@ fun CompetitionMatchesScreen(league: LeagueResponse, season: SeasonResponse, com
                             matches = s.seasonMatches,
                             teams = s.seasonTeams,
                             isAdmin = isAdmin,
+                            rankingType = competition.competitionRankingType,
+                            calendarGenerationMode = competition.calendarGenerationMode,
                             onDeleteMatch = { matchId -> vm.deleteMatch(competition.id, matchId) },
                             onUpdateResult = { matchId, sA, sB -> vm.updateMatchResult(competition.id, matchId, sA, sB) }
                         )
@@ -59,7 +61,13 @@ fun CompetitionMatchesScreen(league: LeagueResponse, season: SeasonResponse, com
                 }
             }
 
-            if (competition.status != "CONCLUDED") {
+            val isAdmin = s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER"
+            val isJoined = competition.currentUserJoined
+            val showAddButton = competition.matchCreationMode == "FREE" && 
+                                (competition.status == "ACTIVE" || competition.status == null) && 
+                                (isAdmin || isJoined)
+
+            if (showAddButton) {
                 FloatingActionButton(
                     onClick = { showMatchForm = true },
                     modifier = Modifier

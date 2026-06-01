@@ -146,7 +146,8 @@ data class CompetitionResponse(
     val winByTwo: Boolean = false,
     val homeAndAway: Boolean = false,
     val currentUserJoined: Boolean = false,
-    val matchCreationMode: String = "FREE"
+    val matchCreationMode: String = "FREE",
+    val calendarGenerationMode: String = "SEQUENTIAL"
 )
 
 @Serializable
@@ -182,6 +183,7 @@ data class CreateCompetitionRequest(
     val matchFormat: String = "POINTS",
     val winByTwo: Boolean = false,
     val matchCreationMode: String = "FREE",
+    val calendarGenerationMode: String = "SEQUENTIAL",
     val homeAndAway: Boolean = false
 )
 
@@ -203,7 +205,8 @@ data class CompetitionTemplateResponse(
     val lossPoints: Int = 0,
     val cappottoEnabled: Boolean = false,
     val cappottoBonusPoints: Int = 0,
-    val homeAndAway: Boolean = false
+    val homeAndAway: Boolean = false,
+    val calendarGenerationMode: String = "SEQUENTIAL"
 )
 
 // --- Sport ---
@@ -285,7 +288,8 @@ data class MatchResponse( // Renamed from Match
     val teamARatingDelta: Int? = null,
     val teamBRatingBefore: Int? = null,
     val teamBRatingAfter: Int? = null,
-    val teamBRatingDelta: Int? = null
+    val teamBRatingDelta: Int? = null,
+    val roundNumber: Int? = null
 )
 
 @Serializable

@@ -1,17 +1,20 @@
 package com.biliardino.ui.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -23,7 +26,12 @@ import com.biliardino.model.SeasonResponse
 import com.biliardino.util.DateUtils
 import com.biliardino.viewmodel.AppViewModel
 import com.biliardino.viewmodel.UiState
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateCompetitionScreen(
     league: LeagueResponse,
@@ -39,6 +47,7 @@ fun CreateCompetitionScreen(
     var selectedMatchFormat by remember { mutableStateOf("POINTS") }
     var winByTwo by remember { mutableStateOf(false) }
     var matchCreationMode by remember { mutableStateOf("FREE") }
+    var calendarGenerationMode by remember { mutableStateOf("ROUNDS") }
     var selectedSportId by remember { mutableStateOf<Long?>(null) }
     var joinCreator by remember { mutableStateOf(false) }
     var useTargetScore by remember { mutableStateOf(false) }
@@ -66,6 +75,7 @@ fun CreateCompetitionScreen(
         selectedMatchFormat = template.matchFormat
         winByTwo = false // Default
         matchCreationMode = if (template.type == "LEAGUE") "SCHEDULED" else "FREE"
+        calendarGenerationMode = template.calendarGenerationMode
         targetScore = (template.targetScore ?: targetScore).coerceAtLeast(1)
         useTargetScore = template.useTargetScore
         allowDraw = template.allowDraw
@@ -170,6 +180,15 @@ fun CreateCompetitionScreen(
                 onSelected = { matchCreationMode = it }
             )
 
+            if (matchCreationMode == "SCHEDULED") {
+                OptionRow(
+                    label = "Modalità calendario",
+                    options = listOf("SEQUENTIAL" to "Sequenziale", "ROUNDS" to "A giornate"),
+                    selected = calendarGenerationMode,
+                    onSelected = { calendarGenerationMode = it }
+                )
+            }
+
             ToggleLine("Partecipo anche io", joinCreator) { joinCreator = it }
         }
 
@@ -209,26 +228,88 @@ fun CreateCompetitionScreen(
         }
 
         CreationSectionCard("Date") {
+            var showStartPicker by remember { mutableStateOf(false) }
+            var showEndPicker by remember { mutableStateOf(false) }
+
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = startDate,
-                    onValueChange = { startDate = it },
+                    onValueChange = { },
                     label = { Text("Data inizio") },
-                    placeholder = { Text("GG/MM/AAAA") },
-                    modifier = Modifier.weight(1f),
+                    readOnly = true,
+                    trailingIcon = {
+                        IconButton(onClick = { showStartPicker = true }) {
+                            Icon(Icons.Default.CalendarMonth, contentDescription = null)
+                        }
+                    },
+                    modifier = Modifier.weight(1f).clickable { showStartPicker = true },
                     shape = MaterialTheme.shapes.medium,
                     singleLine = true
                 )
                 OutlinedTextField(
                     value = endDate,
-                    onValueChange = { endDate = it },
+                    onValueChange = { },
                     label = { Text("Data fine") },
-                    placeholder = { Text("GG/MM/AAAA") },
-                    modifier = Modifier.weight(1f),
+                    readOnly = true,
+                    trailingIcon = {
+                        IconButton(onClick = { showEndPicker = true }) {
+                            Icon(Icons.Default.CalendarMonth, contentDescription = null)
+                        }
+                    },
+                    modifier = Modifier.weight(1f).clickable { showEndPicker = true },
                     shape = MaterialTheme.shapes.medium,
                     singleLine = true
                 )
             }
+
+            if (showStartPicker) {
+                val datePickerState = rememberDatePickerState(
+                    initialSelectedDateMillis = LocalDate.parse(startDate, DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                        .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                )
+                DatePickerDialog(
+                    onDismissRequest = { showStartPicker = false },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            datePickerState.selectedDateMillis?.let {
+                                val date = Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()
+                                startDate = date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                            }
+                            showStartPicker = false
+                        }) { Text("OK") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showStartPicker = false }) { Text("Annulla") }
+                    }
+                ) {
+                    DatePicker(state = datePickerState)
+                }
+            }
+
+            if (showEndPicker) {
+                val datePickerState = rememberDatePickerState(
+                    initialSelectedDateMillis = LocalDate.parse(endDate, DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                        .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                )
+                DatePickerDialog(
+                    onDismissRequest = { showEndPicker = false },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            datePickerState.selectedDateMillis?.let {
+                                val date = Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()
+                                endDate = date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                            }
+                            showEndPicker = false
+                        }) { Text("OK") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showEndPicker = false }) { Text("Annulla") }
+                    }
+                ) {
+                    DatePicker(state = datePickerState)
+                }
+            }
+
             if (!validDates) {
                 Text(
                     "La data fine non può essere precedente alla data inizio.",
@@ -295,6 +376,7 @@ fun CreateCompetitionScreen(
                         matchFormat = selectedMatchFormat,
                         winByTwo = winByTwo,
                         matchCreationMode = matchCreationMode,
+                        calendarGenerationMode = calendarGenerationMode,
                         homeAndAway = homeAndAway
                     )
                 )

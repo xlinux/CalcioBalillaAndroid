@@ -28,30 +28,41 @@ fun MatchList(
     matches: List<MatchResponse>,
     teams: List<TeamResponse>,
     isAdmin: Boolean = false,
+    rankingType: String? = "ELO",
+    calendarGenerationMode: String? = "SEQUENTIAL",
     onDeleteMatch: ((Long) -> Unit)? = null,
     onUpdateResult: ((Long, Int, Int) -> Unit)? = null
 ) {
-    val groupedMatches = remember(matches) {
-        matches.sortedByDescending { it.playedAt ?: "" }
-            .groupBy { match ->
-                match.playedAt?.let {
-                    try {
-                        val dt = LocalDateTime.parse(it.substring(0, 19))
-                        val date = dt.toLocalDate()
-                        val today = LocalDate.now()
-                        val yesterday = today.minusDays(1)
-                        val dateFormatted = date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
-                        
-                        when (date) {
-                            today -> "OGGI ($dateFormatted)"
-                            yesterday -> "IERI ($dateFormatted)"
-                            else -> dateFormatted
+    val isRounds = calendarGenerationMode == "ROUNDS"
+
+    val groupedMatches = remember(matches, isRounds) {
+        if (isRounds) {
+            matches.sortedWith(compareBy({ it.roundNumber ?: Int.MAX_VALUE }, { it.id }))
+                .groupBy { match ->
+                    match.roundNumber?.let { "Giornata $it" } ?: "Partite libere"
+                }
+        } else {
+            matches.sortedByDescending { it.playedAt ?: "" }
+                .groupBy { match ->
+                    match.playedAt?.let {
+                        try {
+                            val dt = LocalDateTime.parse(it.substring(0, 19))
+                            val date = dt.toLocalDate()
+                            val today = LocalDate.now()
+                            val yesterday = today.minusDays(1)
+                            val dateFormatted = date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                            
+                            when (date) {
+                                today -> "OGGI ($dateFormatted)"
+                                yesterday -> "IERI ($dateFormatted)"
+                                else -> dateFormatted
+                            }
+                        } catch (e: Exception) {
+                            "Altre"
                         }
-                    } catch (e: Exception) {
-                        "Altre"
-                    }
-                } ?: "Data Sconosciuta"
-            }
+                    } ?: "Data Sconosciuta"
+                }
+        }
     }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(8.dp)) {
@@ -69,7 +80,7 @@ fun MatchList(
                 )
             }
             items(matchesInGroup) { match ->
-                MatchItem(match, teams, isAdmin, onDeleteMatch, onUpdateResult)
+                MatchItem(match, teams, isAdmin, rankingType, onDeleteMatch, onUpdateResult)
                 Spacer(Modifier.height(12.dp))
             }
         }
@@ -81,6 +92,7 @@ fun MatchItem(
     match: MatchResponse,
     teams: List<TeamResponse>,
     isAdmin: Boolean = false,
+    rankingType: String? = "ELO",
     onDeleteMatch: ((Long) -> Unit)? = null,
     onUpdateResult: ((Long, Int, Int) -> Unit)? = null
 ) {
@@ -96,6 +108,7 @@ fun MatchItem(
     val playerB2 = teamB?.playerBUsername
 
     val isPlayed = match.scoreA != null && match.scoreB != null
+    val isElo = rankingType == "ELO"
 
     ElevatedCard(
         modifier = Modifier
@@ -145,12 +158,14 @@ fun MatchItem(
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
-                    match.teamARatingAfter?.let { rating ->
-                        Text(
-                            text = "$rating pt",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                    if (isElo) {
+                        match.teamARatingAfter?.let { rating ->
+                            Text(
+                                text = "$rating pt",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
 
@@ -167,22 +182,24 @@ fun MatchItem(
                         fontWeight = FontWeight.Bold
                     )
                     
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        match.teamARatingDelta?.let { delta ->
-                            Text(
-                                text = "${if (delta >= 0) "+" else ""}$delta",
-                                color = if (delta >= 0) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        match.teamBRatingDelta?.let { delta ->
-                            Text(
-                                text = "${if (delta >= 0) "+" else ""}$delta",
-                                color = if (delta >= 0) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                    if (isElo) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            match.teamARatingDelta?.let { delta ->
+                                Text(
+                                    text = "${if (delta >= 0) "+" else ""}$delta",
+                                    color = if (delta >= 0) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            match.teamBRatingDelta?.let { delta ->
+                                Text(
+                                    text = "${if (delta >= 0) "+" else ""}$delta",
+                                    color = if (delta >= 0) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
 
@@ -223,12 +240,14 @@ fun MatchItem(
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
-                    match.teamBRatingAfter?.let { rating ->
-                        Text(
-                            text = "$rating pt",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                    if (isElo) {
+                        match.teamBRatingAfter?.let { rating ->
+                            Text(
+                                text = "$rating pt",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }

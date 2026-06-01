@@ -323,10 +323,56 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             currentCompetition = competition,
             currentScreen = Screen.CompetitionStatistics(league, season, competition)
         )
-        loadRankings(competition.id, competition.rankingMode)
-        loadCompetitionMatches(competition.id)
-        loadCompetitionPlayers(competition.id)
-        loadSeasonStatsData(league.id, season.id, competition.id)
+    }
+
+    fun refreshCompetitionData(leagueId: Long, competitionId: Long, rankingMode: String? = null) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        val resolvedRankingMode = rankingMode ?: rankingModeForCompetition(competitionId)
+        
+        runCatching {
+            // 1. Carichiamo Classifiche
+            val playersRank = if (resolvedRankingMode != "TEAM") ApiClientBase.competitions.getPlayerRankings(competitionId) else emptyList()
+            val teamsRank = if (resolvedRankingMode != "PLAYER") ApiClientBase.competitions.getTeamRankings(competitionId) else emptyList()
+
+            // 2. Carichiamo Match
+            val matches = ApiClientBase.competitions.getMatches(competitionId)
+
+            // 3. Carichiamo Squadre
+            val teams = ApiClientBase.competitions.getCompetitionTeams(competitionId)
+
+            // 4. Carichiamo Partecipanti (e dati lega per arricchirli)
+            val compPlayers = ApiClientBase.competitions.getCompetitionPlayers(competitionId)
+            val leagueUsers = ApiClientBase.leagues.getLeagueUsers(leagueId)
+
+            val enrichedUsers = compPlayers.map { player ->
+                val lu = leagueUsers.find { it.userId == player.userId }
+                LeagueUserResponse(
+                    userId = player.userId,
+                    username = player.username,
+                    email = player.email,
+                    rating = lu?.rating ?: 0,
+                    goalsFor = lu?.goalsFor ?: 0,
+                    goalsAgainst = lu?.goalsAgainst ?: 0,
+                    matchesPlayed = lu?.matchesPlayed ?: 0,
+                    cappottiGiven = lu?.cappottiGiven ?: 0,
+                    cappottiReceived = lu?.cappottiReceived ?: 0,
+                    role = player.role
+                )
+            }
+
+            // Update State all at once
+            _state.value = _state.value.copy(
+                playerRankings = playersRank,
+                teamRankings = teamsRank,
+                seasonMatches = matches,
+                seasonTeams = teams,
+                competitionPlayers = compPlayers,
+                seasonUsers = enrichedUsers,
+                loading = false
+            )
+        }.onFailure { e ->
+            _state.value = _state.value.copy(loading = false, error = "Errore caricamento dati: ${e.getErrorMessage()}")
+        }
     }
 
     fun loadCompetitionPlayers(competitionId: Long) = viewModelScope.launch {

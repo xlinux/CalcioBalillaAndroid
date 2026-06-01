@@ -33,8 +33,7 @@ fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, 
 
     // Carichiamo i dati all'avvio
     LaunchedEffect(competition.id) {
-        vm.loadRankings(competition.id, competition.rankingMode)
-        vm.loadSeasonStatsData(league.id, season.id, competition.id)
+        vm.refreshCompetitionData(league.id, competition.id, competition.rankingMode)
     }
 
     Column(Modifier.fillMaxSize()) {
