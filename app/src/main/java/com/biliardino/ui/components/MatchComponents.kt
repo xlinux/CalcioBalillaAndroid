@@ -30,17 +30,35 @@ fun MatchList(
     isAdmin: Boolean = false,
     rankingType: String? = "ELO",
     calendarGenerationMode: String? = "SEQUENTIAL",
+    competitionType: String? = "LEAGUE",
     onDeleteMatch: ((Long) -> Unit)? = null,
     onUpdateResult: ((Long, Int, Int) -> Unit)? = null
 ) {
-    val isRounds = calendarGenerationMode == "ROUNDS"
+    val isLeague = competitionType == "LEAGUE"
+    val isRounds = calendarGenerationMode == "ROUNDS" || isLeague
 
-    val groupedMatches = remember(matches, isRounds) {
+    val groupedMatches = remember(matches, isLeague, isRounds) {
         if (isRounds) {
-            matches.sortedWith(compareBy({ it.roundNumber ?: Int.MAX_VALUE }, { it.id }))
-                .groupBy { match ->
-                    match.roundNumber?.let { "Giornata $it" } ?: "Partite libere"
+            matches.sortedWith(
+                compareBy<MatchResponse> { it.roundNumber ?: Int.MAX_VALUE }
+                    .thenBy { it.playedAt ?: "" }
+                    .thenBy { it.id }
+            ).groupBy { match ->
+                if (isLeague) {
+                    match.roundNumber?.let { "Giornata $it" } ?: "Altre partite"
+                } else {
+                    match.roundNumber?.let { round ->
+                        when (round) {
+                            1 -> "Finale"
+                            2 -> "Semifinali"
+                            4 -> "Quarti"
+                            8 -> "Ottavi"
+                            16 -> "Sedicesimi"
+                            else -> "Turno $round"
+                        }
+                    } ?: "Altre partite"
                 }
+            }
         } else {
             matches.sortedByDescending { it.playedAt ?: "" }
                 .groupBy { match ->

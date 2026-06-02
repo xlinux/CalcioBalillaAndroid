@@ -75,7 +75,6 @@ fun CreateCompetitionScreen(
         selectedMatchFormat = template.matchFormat
         winByTwo = false // Default
         matchCreationMode = if (template.type == "LEAGUE") "SCHEDULED" else "FREE"
-        calendarGenerationMode = template.calendarGenerationMode
         targetScore = (template.targetScore ?: targetScore).coerceAtLeast(1)
         useTargetScore = template.useTargetScore
         allowDraw = template.allowDraw
@@ -85,6 +84,19 @@ fun CreateCompetitionScreen(
         cappottoEnabled = template.cappottoEnabled
         cappottoBonusPoints = template.cappottoBonusPoints
         homeAndAway = template.homeAndAway
+        
+        // Forza ROUNDS se il template è un campionato andata/ritorno
+        if (template.type == "LEAGUE" && template.homeAndAway) {
+            calendarGenerationMode = "ROUNDS"
+        } else {
+            calendarGenerationMode = template.calendarGenerationMode
+        }
+    }
+
+    LaunchedEffect(selectedType, homeAndAway) {
+        if (selectedType == "LEAGUE" && homeAndAway) {
+            calendarGenerationMode = "ROUNDS"
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -136,7 +148,14 @@ fun CreateCompetitionScreen(
                 label = "Tipo",
                 options = listOf("LEAGUE" to "Campionato", "CUP" to "Torneo"),
                 selected = selectedType,
-                onSelected = { selectedType = it }
+                onSelected = { 
+                    selectedType = it
+                    if (it == "LEAGUE" && homeAndAway) {
+                        calendarGenerationMode = "ROUNDS"
+                    } else if (it == "CUP") {
+                        calendarGenerationMode = "ROUNDS"
+                    }
+                }
             )
 
             SportTemplatePicker(
@@ -177,14 +196,19 @@ fun CreateCompetitionScreen(
                 label = "Creazione partite",
                 options = listOf("FREE" to "Libera", "SCHEDULED" to "Calendario"),
                 selected = matchCreationMode,
-                onSelected = { matchCreationMode = it }
+                onSelected = { 
+                    matchCreationMode = it 
+                    if (it == "SCHEDULED" && selectedType == "LEAGUE" && homeAndAway) {
+                        calendarGenerationMode = "ROUNDS"
+                    }
+                }
             )
 
             if (matchCreationMode == "SCHEDULED") {
                 OptionRow(
                     label = "Modalità calendario",
                     options = listOf("SEQUENTIAL" to "Sequenziale", "ROUNDS" to "A giornate"),
-                    selected = calendarGenerationMode,
+                    selected = if ((selectedType == "LEAGUE" && homeAndAway) || selectedType == "CUP") "ROUNDS" else calendarGenerationMode,
                     onSelected = { calendarGenerationMode = it }
                 )
             }
@@ -224,7 +248,12 @@ fun CreateCompetitionScreen(
             if (cappottoEnabled) {
                 NumberStepperLine("Bonus cappotto", cappottoBonusPoints, 0..100) { cappottoBonusPoints = it }
             }
-            ToggleLine("Andata e ritorno", homeAndAway) { homeAndAway = it }
+            ToggleLine("Andata e ritorno", homeAndAway) { 
+                homeAndAway = it
+                if (it && selectedType == "LEAGUE") {
+                    calendarGenerationMode = "ROUNDS"
+                }
+            }
         }
 
         CreationSectionCard("Date") {
@@ -349,6 +378,14 @@ fun CreateCompetitionScreen(
         Button(
             onClick = {
                 val sportId = selectedSportId ?: return@Button
+                
+                // Forza ROUNDS se campionato andata/ritorno
+                val finalCalendarMode = if (selectedType == "LEAGUE" && homeAndAway) {
+                    "ROUNDS"
+                } else {
+                    calendarGenerationMode
+                }
+
                 vm.createCompetition(
                     league,
                     season,
@@ -376,7 +413,7 @@ fun CreateCompetitionScreen(
                         matchFormat = selectedMatchFormat,
                         winByTwo = winByTwo,
                         matchCreationMode = matchCreationMode,
-                        calendarGenerationMode = calendarGenerationMode,
+                        calendarGenerationMode = finalCalendarMode,
                         homeAndAway = homeAndAway
                     )
                 )

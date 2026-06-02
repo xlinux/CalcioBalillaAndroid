@@ -679,8 +679,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun createCompetition(league: LeagueResponse, season: SeasonResponse, request: CreateCompetitionRequest) = viewModelScope.launch {
+        // Fail-safe: forza ROUNDS per campionati andata/ritorno
+        val finalRequest = if (request.type == "LEAGUE" && request.homeAndAway) {
+            request.copy(calendarGenerationMode = "ROUNDS")
+        } else {
+            request
+        }
+        
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
-        runCatching { ApiClientBase.leagues.createCompetition(season.id, request) }
+        runCatching { ApiClientBase.leagues.createCompetition(season.id, finalRequest) }
             .onSuccess {
                 _state.value = _state.value.copy(successMessage = "Competizione creata!")
                 selectSeason(league, season)

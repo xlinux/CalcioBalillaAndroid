@@ -54,6 +54,7 @@ fun CompetitionMatchesScreen(league: LeagueResponse, season: SeasonResponse, com
                             isAdmin = isAdmin,
                             rankingType = competition.competitionRankingType,
                             calendarGenerationMode = competition.calendarGenerationMode,
+                            competitionType = competition.type,
                             onDeleteMatch = { matchId -> vm.deleteMatch(competition.id, matchId) },
                             onUpdateResult = { matchId, sA, sB -> vm.updateMatchResult(competition.id, matchId, sA, sB) }
                         )

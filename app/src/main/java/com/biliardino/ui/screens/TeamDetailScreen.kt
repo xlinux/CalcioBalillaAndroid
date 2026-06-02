@@ -82,6 +82,7 @@ fun TeamDetailScreen(league: LeagueResponse, season: SeasonResponse, competition
                         isAdmin = isAdmin,
                         rankingType = competition.competitionRankingType,
                         calendarGenerationMode = competition.calendarGenerationMode,
+                        competitionType = competition.type,
                         onDeleteMatch = { matchId -> vm.deleteMatch(competition.id, matchId) },
                         onUpdateResult = { matchId, sA, sB -> vm.updateMatchResult(competition.id, matchId, sA, sB) }
                     )
