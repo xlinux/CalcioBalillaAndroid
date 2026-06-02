@@ -96,8 +96,8 @@ fun MatchItem(
     onDeleteMatch: ((Long) -> Unit)? = null,
     onUpdateResult: ((Long, Int, Int) -> Unit)? = null
 ) {
-    val teamA = teams.find { it.id == match.teamAId }
-    val teamB = teams.find { it.id == match.teamBId }
+    val teamA = match.teamAId?.let { id -> teams.find { it.id == id } }
+    val teamB = match.teamBId?.let { id -> teams.find { it.id == id } }
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showResultDialog by remember { mutableStateOf(false) }
@@ -141,7 +141,7 @@ fun MatchItem(
                 // Team A
                 Column(Modifier.weight(1.2f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = match.teamAName ?: "Team A",
+                        text = match.teamAName ?: "TBD",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -223,7 +223,7 @@ fun MatchItem(
                 // Team B
                 Column(Modifier.weight(1.2f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = match.teamBName ?: "Team B",
+                        text = match.teamBName ?: "TBD",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,

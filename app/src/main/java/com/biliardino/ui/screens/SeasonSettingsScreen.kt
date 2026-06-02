@@ -154,6 +154,67 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                         )
                     }
                 }
+
+                if (competition.type == "CUP") {
+                    Spacer(Modifier.height(8.dp))
+                    val validEntryCounts = listOf(4, 8, 16, 32)
+                    val canGenerateBracket = competition.active != false &&
+                            s.seasonTeams.size in validEntryCounts &&
+                            s.seasonMatches.isEmpty()
+
+                    var showGenerateBracketDialog by remember { mutableStateOf(false) }
+
+                    Button(
+                        onClick = { showGenerateBracketDialog = true },
+                        enabled = canGenerateBracket,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Text(
+                            "GENERA TABELLONE",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    
+                    if (s.seasonMatches.isNotEmpty()) {
+                        Text(
+                            "Tabellone già generato.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    } else if (s.seasonTeams.size !in validEntryCounts) {
+                        Text(
+                            "Servono 4, 8, 16 o 32 squadre.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+
+                    if (showGenerateBracketDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showGenerateBracketDialog = false },
+                            title = { Text("Genera Tabellone") },
+                            text = { Text("Sei sicuro di voler generare il tabellone del torneo? Verranno creati tutti gli incontri a eliminazione diretta.") },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    vm.generateBracket(competition.id)
+                                    showGenerateBracketDialog = false
+                                }) {
+                                    Text("GENERA")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showGenerateBracketDialog = false }) {
+                                    Text("ANNULLA")
+                                }
+                            }
+                        )
+                    }
+                }
             }
         }
 

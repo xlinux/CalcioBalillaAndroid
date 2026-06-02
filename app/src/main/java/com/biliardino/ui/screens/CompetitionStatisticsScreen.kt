@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.biliardino.model.*
 import com.biliardino.ui.Screen
+import com.biliardino.ui.components.TournamentBracketView
 import com.biliardino.viewmodel.AppViewModel
 import com.biliardino.viewmodel.UiState
 
@@ -30,6 +31,7 @@ import com.biliardino.viewmodel.UiState
 fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, competition: CompetitionResponse, s: UiState, vm: AppViewModel) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
+    var showResultDialogByBracket by remember { mutableStateOf<MatchResponse?>(null) }
 
     // Carichiamo i dati all'avvio
     LaunchedEffect(competition.id) {
@@ -38,9 +40,16 @@ fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, 
 
     Column(Modifier.fillMaxSize()) {
         val isTeamMatch = competition.matchType == "TEAM"
-        val tabs = if (isTeamMatch) listOf("Classifica", "Squadre") else listOf("Classifica", "Giocatori", "Squadre")
-        val showPlayerRanking = competition.rankingMode != "TEAM" && !isTeamMatch
-        val showTeamRanking = competition.rankingMode != "PLAYER"
+        val isCup = competition.type == "CUP"
+        
+        val tabs = if (isCup) {
+            listOf("Tabellone")
+        } else {
+            if (isTeamMatch) listOf("Classifica", "Squadre") else listOf("Classifica", "Giocatori", "Squadre")
+        }
+
+        val showPlayerRanking = competition.rankingMode != "TEAM" && !isTeamMatch && !isCup
+        val showTeamRanking = competition.rankingMode != "PLAYER" && !isCup
 
         TabRow(
             selectedTabIndex = selectedTab,
@@ -51,7 +60,7 @@ fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, 
                     selected = selectedTab == index,
                     onClick = { 
                         selectedTab = index
-                        if (index != 1 && index != 2) searchQuery = "" // Reset search when leaving players or teams tab
+                        if (index != 1 && index != 2) searchQuery = "" 
                     },
                     text = { Text(title, fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal) },
                     unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -59,12 +68,12 @@ fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, 
             }
         }
 
-        if (selectedTab == 1 || selectedTab == 2) {
+        if ((!isCup && (selectedTab == 1 || selectedTab == 2)) || (isCup && selectedTab == 1)) {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 modifier = Modifier.fillMaxWidth().padding(8.dp),
-                placeholder = { Text(if (selectedTab == 1) "Cerca giocatore..." else "Cerca squadra...") },
+                placeholder = { Text("Cerca...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
                 shape = MaterialTheme.shapes.medium
@@ -72,56 +81,81 @@ fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, 
         }
 
         Box(Modifier.weight(1f)) {
-            val actualTab = if (isTeamMatch && selectedTab >= 1) selectedTab + 1 else selectedTab
-            when (actualTab) {
-                0 -> Column {
-                    var rankingTab by remember { mutableIntStateOf(0) }
-                    if (showPlayerRanking && showTeamRanking) {
-                        TabRow(selectedTabIndex = rankingTab, containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)) {
-                            Tab(
-                                selected = rankingTab == 0,
-                                onClick = { rankingTab = 0 },
-                                text = { Text("Giocatori", fontSize = 12.sp, fontWeight = if (rankingTab == 0) FontWeight.Bold else FontWeight.Normal) },
-                                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Tab(
-                                selected = rankingTab == 1,
-                                onClick = { rankingTab = 1 },
-                                text = { Text("Squadre", fontSize = 12.sp, fontWeight = if (rankingTab == 1) FontWeight.Bold else FontWeight.Normal) },
-                                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    when {
-                        showPlayerRanking && showTeamRanking && rankingTab == 0 -> PlayerRankingList(s.playerRankings)
-                        showPlayerRanking && showTeamRanking -> TeamRankingList(s.teamRankings, competition)
-                        showPlayerRanking -> PlayerRankingList(s.playerRankings)
-                        else -> TeamRankingList(s.teamRankings, competition)
+            if (isCup) {
+                when (selectedTab) {
+                    0 -> TournamentBracketView(
+                        matches = s.seasonMatches,
+                        onMatchClick = { showResultDialogByBracket = it }
+                    )
+                    1 -> {
+                        val filteredTeams = s.seasonTeams
+                            .filter { it.name.contains(searchQuery, ignoreCase = true) }
+                        SeasonTeamsScreen(league, season, competition, s.copy(seasonTeams = filteredTeams), vm)
                     }
                 }
-                1 -> {
-                    val filteredUsers = s.seasonUsers
-                        .filter { it.username.contains(searchQuery, ignoreCase = true) || (it.email?.contains(searchQuery, ignoreCase = true) == true) }
-                        .sortedByDescending { it.rating }
-                    
-                    UserList(filteredUsers) { user ->
-                        vm.navigateTo(Screen.PlayerDetail(league, season, competition, user))
-                        vm.loadPlayerDetailData(competition.id, user.userId)
-                    }
-                }
-                2 -> {
-                    val filteredTeams = s.seasonTeams
-                        .filter { 
-                            it.name.contains(searchQuery, ignoreCase = true) || 
-                            (it.playerAUsername?.contains(searchQuery, ignoreCase = true) == true) || 
-                            (it.playerBUsername?.contains(searchQuery, ignoreCase = true) == true)
+            } else {
+                val actualTab = if (isTeamMatch && selectedTab >= 1) selectedTab + 1 else selectedTab
+                when (actualTab) {
+                    0 -> Column {
+                        var rankingTab by remember { mutableIntStateOf(0) }
+                        if (showPlayerRanking && showTeamRanking) {
+                            TabRow(selectedTabIndex = rankingTab, containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)) {
+                                Tab(
+                                    selected = rankingTab == 0,
+                                    onClick = { rankingTab = 0 },
+                                    text = { Text("Giocatori", fontSize = 12.sp, fontWeight = if (rankingTab == 0) FontWeight.Bold else FontWeight.Normal) },
+                                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Tab(
+                                    selected = rankingTab == 1,
+                                    onClick = { rankingTab = 1 },
+                                    text = { Text("Squadre", fontSize = 12.sp, fontWeight = if (rankingTab == 1) FontWeight.Bold else FontWeight.Normal) },
+                                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
-                        .sortedByDescending { if (isTeamMatch) (it.points ?: 0) else (it.rating ?: 0) }
+                        when {
+                            showPlayerRanking && showTeamRanking && rankingTab == 0 -> PlayerRankingList(s.playerRankings)
+                            showPlayerRanking && showTeamRanking -> TeamRankingList(s.teamRankings, competition)
+                            showPlayerRanking -> PlayerRankingList(s.playerRankings)
+                            else -> TeamRankingList(s.teamRankings, competition)
+                        }
+                    }
+                    1 -> {
+                        val filteredUsers = s.seasonUsers
+                            .filter { it.username.contains(searchQuery, ignoreCase = true) || (it.email?.contains(searchQuery, ignoreCase = true) == true) }
+                            .sortedByDescending { it.rating }
                         
-                    SeasonTeamsScreen(league, season, competition, s.copy(seasonTeams = filteredTeams), vm)
+                        UserList(filteredUsers) { user ->
+                            vm.navigateTo(Screen.PlayerDetail(league, season, competition, user))
+                            vm.loadPlayerDetailData(competition.id, user.userId)
+                        }
+                    }
+                    2 -> {
+                        val filteredTeams = s.seasonTeams
+                            .filter { 
+                                it.name.contains(searchQuery, ignoreCase = true) || 
+                                (it.playerAUsername?.contains(searchQuery, ignoreCase = true) == true) || 
+                                (it.playerBUsername?.contains(searchQuery, ignoreCase = true) == true)
+                            }
+                            .sortedByDescending { if (isTeamMatch) (it.points ?: 0) else (it.rating ?: 0) }
+                            
+                        SeasonTeamsScreen(league, season, competition, s.copy(seasonTeams = filteredTeams), vm)
+                    }
                 }
             }
         }
+    }
+
+    if (showResultDialogByBracket != null) {
+        com.biliardino.ui.components.MatchResultDialog(
+            match = showResultDialogByBracket!!,
+            onDismiss = { showResultDialogByBracket = null },
+            onConfirm = { sA, sB ->
+                vm.updateMatchResult(competition.id, showResultDialogByBracket!!.id, sA, sB)
+                showResultDialogByBracket = null
+            }
+        )
     }
 }
 

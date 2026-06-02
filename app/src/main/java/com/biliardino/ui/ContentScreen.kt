@@ -157,28 +157,28 @@ fun ContentScreen(vm: AppViewModel) {
                 if (league != null && season != null) {
                     NavigationBar {
                         if (competition != null) {
+                            val isCup = competition.type == "CUP"
                             NavigationBarItem(
                                 selected = screen is Screen.CompetitionStatistics || screen is Screen.TeamDetail || screen is Screen.PlayerDetail || screen is Screen.SeasonTeams || screen is Screen.CompetitionParticipants,
                                 onClick = { 
                                     vm.navigateTo(Screen.CompetitionStatistics(league, season, competition))
-                                    vm.loadRankings(competition.id, competition.rankingMode)
-                                    vm.loadCompetitionMatches(competition.id)
-                                    vm.loadCompetitionPlayers(competition.id)
-                                    vm.loadSeasonStatsData(league.id, season.id, competition.id)
+                                    vm.refreshCompetitionData(league.id, competition.id, competition.rankingMode)
                                 },
                                 icon = { Icon(Icons.Default.List, contentDescription = "Home") },
-                                label = { Text("Stats") }
+                                label = { Text(if (isCup) "Tabellone" else "Stats") }
                             )
-                            NavigationBarItem(
-                                selected = screen is Screen.CompetitionMatches,
-                                onClick = { 
-                                    vm.navigateTo(Screen.CompetitionMatches(league, season, competition))
-                                    vm.loadCompetitionMatches(competition.id)
-                                    vm.loadSeasonStatsData(league.id, season.id, competition.id)
-                                },
-                                icon = { Icon(Icons.Default.Add, contentDescription = "Partite") },
-                                label = { Text("Partite") }
-                            )
+                            if (!isCup) {
+                                NavigationBarItem(
+                                    selected = screen is Screen.CompetitionMatches,
+                                    onClick = { 
+                                        vm.navigateTo(Screen.CompetitionMatches(league, season, competition))
+                                        vm.loadCompetitionMatches(competition.id)
+                                        vm.loadSeasonStatsData(league.id, season.id, competition.id)
+                                    },
+                                    icon = { Icon(Icons.Default.Add, contentDescription = "Partite") },
+                                    label = { Text("Partite") }
+                                )
+                            }
                         }
                         NavigationBarItem(
                             selected = screen is Screen.SeasonSettings,

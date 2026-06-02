@@ -681,6 +681,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
     }
 
+    fun generateBracket(competitionId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.competitions.generateBracket(competitionId) }
+            .onSuccess {
+                _state.value = _state.value.copy(
+                    successMessage = "Tabellone generato con successo!",
+                    loading = false
+                )
+                // Refresh data
+                loadCompetitionMatches(competitionId)
+                loadRankings(competitionId)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore generazione tabellone: ${e.getErrorMessage()}")
+            }
+    }
+
     fun closeLeague(leagueId: Long) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.leagues.closeLeague(leagueId) }
@@ -1018,14 +1035,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                             val json = Json { ignoreUnknownKeys = true }.parseToJsonElement(trimmedBody).jsonObject
                             json["message"]?.jsonPrimitive?.content
                                 ?: json["error"]?.jsonPrimitive?.content
-                                ?: "Errore $code"
+                                ?: "Errore $code: $trimmedBody"
                         } catch (e: Exception) {
-                            "Errore $code"
+                            "Errore $code: $trimmedBody"
                         }
-                    } else if (code >= 500) {
-                        "Errore del server ($code)"
                     } else {
-                        trimmedBody.take(100)
+                        // Se non è un JSON, mostra il testo puro (spesso il backend manda stringhe semplici per gli errori)
+                        "Errore: $trimmedBody"
                     }
                 } else {
                     "Errore del server ($code)"

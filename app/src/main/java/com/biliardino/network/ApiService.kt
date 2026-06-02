@@ -150,6 +150,9 @@ interface CompetitionApi {
     @POST("competitions/{competitionId}/calendar/generate")
     suspend fun generateCalendar(@Path("competitionId") competitionId: Long)
 
+    @POST("competitions/{competitionId}/bracket/generate")
+    suspend fun generateBracket(@Path("competitionId") competitionId: Long)
+
     @GET("competitions/{competitionId}/teams/{teamId}/statistics")
     suspend fun getTeamStatistics(
         @Path("competitionId") competitionId: Long,

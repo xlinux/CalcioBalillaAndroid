@@ -274,9 +274,9 @@ data class MatchResponse( // Renamed from Match
     val id: Long,
     val seasonId: Long? = null,
     val type: String? = null,
-    val teamAId: Long,
+    val teamAId: Long? = null,
     val teamAName: String? = null,
-    val teamBId: Long,
+    val teamBId: Long? = null,
     val teamBName: String? = null,
     val scoreA: Int? = null,
     val scoreB: Int? = null,
@@ -289,7 +289,12 @@ data class MatchResponse( // Renamed from Match
     val teamBRatingBefore: Int? = null,
     val teamBRatingAfter: Int? = null,
     val teamBRatingDelta: Int? = null,
-    val roundNumber: Int? = null
+    val roundNumber: Int? = null,
+    val bracketRound: Int? = null,
+    val bracketPosition: Int? = null,
+    val nextMatchId: Long? = null,
+    val nextMatchSlot: String? = null,
+    val resultInsertable: Boolean = true
 )
 
 @Serializable
