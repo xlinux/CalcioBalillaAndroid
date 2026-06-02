@@ -12,7 +12,11 @@ import android.util.Log
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
 import androidx.fragment.app.FragmentActivity
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -107,11 +111,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun checkSession() = viewModelScope.launch {
         val token = sessionManager.authToken.first()
         val refreshToken = sessionManager.refreshToken.first()
+        val bioEnabled = sessionManager.isBiometricEnabled.first()
+
         if (token != null && refreshToken != null) {
             ApiClientBase.authToken = token
-            loadCurrentUser()
-            _state.value = _state.value.copy(currentScreen = Screen.MyLeagues)
-            loadMyLeagues()
+            if (bioEnabled) {
+                // Stay on Splash and wait for biometric or just set a flag to show it
+                // For now, let's keep it simple: if bio is enabled, we will show it on the first screen
+                // or we could stay on Splash until authenticated.
+                // Let's set the screen to Splash (it's already Splash) and wait.
+                _state.value = _state.value.copy(currentScreen = Screen.Splash)
+            } else {
+                loadCurrentUser()
+                _state.value = _state.value.copy(currentScreen = Screen.MyLeagues)
+                loadMyLeagues()
+            }
         } else {
             _state.value = _state.value.copy(currentScreen = Screen.PublicLeagues)
         }
@@ -119,7 +133,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun checkBiometricAvailability() {
         val biometricManager = BiometricManager.from(getApplication())
-        val canAuthenticate = biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+        val canAuthenticate = biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
         _state.value = _state.value.copy(
             canUseBiometrics = canAuthenticate == BiometricManager.BIOMETRIC_SUCCESS
         )
@@ -141,38 +155,86 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _state.value = _state.value.copy(error = null, successMessage = null)
     }
 
+    private fun handleSuccessfulLogin(auth: AuthResponse, customMessage: String? = null) {
+        val jwt = auth.token ?: auth.jwt
+        if (jwt != null) {
+            ApiClientBase.authToken = jwt
+            val refreshToken = auth.refreshToken ?: jwt
+            viewModelScope.launch {
+                sessionManager.saveTokens(jwt, refreshToken)
+                loadCurrentUser()
+                
+                val s = _state.value
+                val showBioPrompt = s.canUseBiometrics && !s.isBiometricEnabled
+
+                _state.value = s.copy(
+                    currentUser = auth.copy(token = jwt, refreshToken = refreshToken),
+                    loading = false,
+                    currentScreen = Screen.MyLeagues,
+                    successMessage = customMessage ?: "Login effettuato con successo!",
+                    showBiometricSetupPrompt = showBioPrompt
+                )
+                loadMyLeagues()
+            }
+        } else {
+            _state.value = _state.value.copy(loading = false, error = "Errore: token mancante")
+        }
+    }
+
     fun login() = viewModelScope.launch {
         val s = _state.value
         _state.value = s.copy(loading = true, error = null, successMessage = null)
         runCatching {
             ApiClientBase.auth.login(LoginRequest(s.email, s.password))
         }.onSuccess { auth ->
-            val jwt = auth.token ?: auth.jwt
-            
-            if (jwt != null) {
-                ApiClientBase.authToken = jwt
-                // Salviamo lo stesso token anche come refresh se il backend non ne manda uno specifico
-                val refreshToken = auth.refreshToken ?: jwt
-                sessionManager.saveTokens(jwt, refreshToken)
-                
-                // Fetch complete user info after login
-                loadCurrentUser()
-
-                val showBioPrompt = s.canUseBiometrics && !s.isBiometricEnabled
-
-                _state.value = _state.value.copy(
-                    currentUser = auth.copy(token = jwt, refreshToken = refreshToken),
-                    loading = false,
-                    currentScreen = Screen.MyLeagues,
-                    successMessage = "Login effettuato con successo!",
-                    showBiometricSetupPrompt = showBioPrompt
-                )
-                loadMyLeagues()
-            } else {
-                _state.value = _state.value.copy(loading = false, error = "Errore: token mancante")
-            }
+            // Save credentials for biometric before handling success
+            sessionManager.saveCredentials(s.email, s.password)
+            handleSuccessfulLogin(auth)
         }.onFailure { e ->
             _state.value = _state.value.copy(loading = false, error = "Login fallito: ${e.getErrorMessage()}")
+        }
+    }
+
+    fun googleLogin(activity: FragmentActivity) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        val credentialManager = CredentialManager.create(activity)
+        
+        // Per ottenere un idToken valido per il backend, DEVI usare il "Web Client ID"
+        // recuperato dalla console Google Cloud, NON l'Android Client ID.
+        val googleIdOption = GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(false)
+            .setServerClientId("791240889172-v2g6jck0sj89j807khvs90n4cuato6eh.apps.googleusercontent.com")
+            .setAutoSelectEnabled(false)
+            .build()
+
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(googleIdOption)
+            .build()
+
+        try {
+            val result = credentialManager.getCredential(activity, request)
+            val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(result.credential.data)
+            val idToken = googleIdTokenCredential.idToken
+            
+            Log.d("AppViewModel", "Google ID Token received: ${idToken.take(10)}...")
+
+            runCatching {
+                ApiClientBase.auth.googleLogin(GoogleLoginRequest(idToken))
+            }.onSuccess { auth ->
+                auth.email?.let { sessionManager.saveCredentials(it, "OAUTH_GOOGLE") }
+                handleSuccessfulLogin(auth, "Login Google completato!")
+            }.onFailure { e ->
+                Log.e("AppViewModel", "Backend Google Login failed", e)
+                _state.value = _state.value.copy(loading = false, error = "Login Google fallito (Backend): ${e.getErrorMessage()}")
+            }
+        } catch (e: Exception) {
+            Log.e("AppViewModel", "Credential Manager Error: ${e.message}", e)
+            val errorMsg = when (e) {
+                is androidx.credentials.exceptions.GetCredentialCancellationException -> "Accesso annullato."
+                is androidx.credentials.exceptions.GetCredentialException -> "Errore configurazione Google: verifica che il Client ID sia di tipo WEB."
+                else -> "Errore Google Sign-In: ${e.message}"
+            }
+            _state.value = _state.value.copy(loading = false, error = errorMsg)
         }
     }
 
@@ -182,26 +244,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         runCatching {
             ApiClientBase.auth.register(RegisterRequest(s.username, s.email, s.password))
         }.onSuccess { auth ->
-            val jwt = auth.jwt
-            val refreshToken = auth.refreshToken
-            
-            if (jwt != null && refreshToken != null) {
-                ApiClientBase.authToken = jwt
-                sessionManager.saveTokens(jwt, refreshToken)
-                
-                val showBioPrompt = s.canUseBiometrics && !s.isBiometricEnabled
-
-                _state.value = _state.value.copy(
-                    currentUser = auth,
-                    loading = false,
-                    currentScreen = Screen.MyLeagues,
-                    successMessage = "Registrazione completata!",
-                    showBiometricSetupPrompt = showBioPrompt
-                )
-                loadMyLeagues()
-            } else {
-                _state.value = _state.value.copy(loading = false, error = "Errore: token mancante")
-            }
+            sessionManager.saveCredentials(s.email, s.password)
+            handleSuccessfulLogin(auth, "Registrazione completata!")
         }.onFailure { e ->
             _state.value = _state.value.copy(loading = false, error = "Registrazione fallita: ${e.getErrorMessage()}")
         }
@@ -985,7 +1029,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun logout() {
         val canBio = _state.value.canUseBiometrics
         val bioEnabled = _state.value.isBiometricEnabled
-        viewModelScope.launch { sessionManager.clearSession() }
+        // Non puliamo la sessione qui se vogliamo permettere il rientro biometrico immediato.
+        // Se l'utente vuole cambiare account, farà un nuovo login che sovrascriverà i token.
+        // viewModelScope.launch { sessionManager.clearSession() }
         ApiClientBase.authToken = null
         _state.value = UiState(currentScreen = Screen.PublicLeagues).copy(
             canUseBiometrics = canBio,
@@ -999,27 +1045,58 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val biometricPrompt = BiometricPrompt(activity, executor, object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 super.onAuthenticationSucceeded(result)
-                val (email, password) = sessionManager.getCredentials()
-                if (email != null && password != null) {
-                    _state.value = _state.value.copy(email = email, password = password)
-                    login()
-                } else {
-                    _state.value = _state.value.copy(error = "Nessuna credenziale salvata. Effettua il primo login manualmente.")
+                viewModelScope.launch {
+                    val (email, password) = sessionManager.getCredentials()
+                    if (email != null && password != null) {
+                        if (password == "OAUTH_GOOGLE") {
+                            handleBiometricSuccess()
+                        } else {
+                            _state.value = _state.value.copy(email = email, password = password)
+                            login()
+                        }
+                    } else {
+                        handleBiometricSuccess()
+                    }
                 }
             }
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                 super.onAuthenticationError(errorCode, errString)
                 _state.value = _state.value.copy(error = errString.toString())
+                // If biometric fails, we should probably go to PublicLeagues or AuthMenu
+                if (_state.value.currentScreen == Screen.Splash) {
+                    _state.value = _state.value.copy(currentScreen = Screen.PublicLeagues)
+                }
             }
         })
 
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Login Biometrico")
-            .setSubtitle("Usa l'impronta digitale o il volto per accedere")
-            .setNegativeButtonText("Annulla")
+            .setTitle("Autenticazione")
+            .setSubtitle("Usa la biometria per accedere")
+            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
             .build()
 
         biometricPrompt.authenticate(promptInfo)
+    }
+
+    private fun handleBiometricSuccess() = viewModelScope.launch {
+        val token = sessionManager.authToken.first()
+        val refreshToken = sessionManager.refreshToken.first()
+        
+        if (token != null) {
+            ApiClientBase.authToken = token
+            loadCurrentUser()
+            _state.value = _state.value.copy(currentScreen = Screen.MyLeagues, loading = false)
+            loadMyLeagues()
+        } else {
+            // Se non abbiamo un token, ma abbiamo credenziali salvate, proviamo il login silente
+            val (email, password) = sessionManager.getCredentials()
+            if (email != null && password != null && password != "OAUTH_GOOGLE") {
+                _state.value = _state.value.copy(email = email, password = password)
+                login()
+            } else {
+                _state.value = _state.value.copy(currentScreen = Screen.PublicLeagues, error = "Sessione scaduta")
+            }
+        }
     }
 
     private fun Throwable.getErrorMessage(): String {

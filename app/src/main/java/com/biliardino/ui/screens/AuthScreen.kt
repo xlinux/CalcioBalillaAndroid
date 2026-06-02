@@ -60,6 +60,16 @@ fun AuthScreen(s: UiState, vm: AppViewModel) {
             Text(if (isRegister) "Registrati" else "Accedi")
         }
 
+        if (!isRegister && fragmentActivity != null) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { vm.googleLogin(fragmentActivity) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Accedi con Google")
+            }
+        }
+
         if (s.canUseBiometrics && fragmentActivity != null && s.isBiometricEnabled) {
             Spacer(Modifier.height(16.dp))
             OutlinedButton(

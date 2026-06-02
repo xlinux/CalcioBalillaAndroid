@@ -11,6 +11,9 @@ interface AuthApi {
     @POST("auth/login")
     suspend fun login(@Body request: LoginRequest): AuthResponse
 
+    @POST("auth/oauth/google")
+    suspend fun googleLogin(@Body request: GoogleLoginRequest): AuthResponse
+
     @POST("auth/refresh")
     suspend fun refresh(@Body request: RefreshRequest): AuthResponse
 }

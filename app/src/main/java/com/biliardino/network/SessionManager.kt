@@ -22,11 +22,27 @@ class SessionManager(private val context: Context) {
         private val THEME_KEY = stringPreferencesKey("theme_preference")
     }
 
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
+    private val masterKey = try {
+        MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+    } catch (e: Exception) {
+        // Fallback or rethrow with more info if needed, but usually Builder shouldn't fail
+        // unless there's a serious KeyStore issue.
+        MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+    }
 
-    private val securePrefs = EncryptedSharedPreferences.create(
+    private val securePrefs = try {
+        createSecurePrefs(context)
+    } catch (e: Exception) {
+        // Se la creazione fallisce (es. KeyStore corrotto), cancelliamo i dati e riproviamo
+        context.deleteSharedPreferences(SECURE_PREFS_NAME)
+        createSecurePrefs(context)
+    }
+
+    private fun createSecurePrefs(context: Context) = EncryptedSharedPreferences.create(
         context,
         SECURE_PREFS_NAME,
         masterKey,

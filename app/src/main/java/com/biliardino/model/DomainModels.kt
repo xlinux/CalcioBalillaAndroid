@@ -11,6 +11,11 @@ data class LoginRequest(
 )
 
 @Serializable
+data class GoogleLoginRequest(
+    val idToken: String
+)
+
+@Serializable
 data class RegisterRequest(
     val name: String, // Changed from username
     val email: String,

@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -30,6 +31,15 @@ import com.biliardino.viewmodel.AppViewModel
 fun ContentScreen(vm: AppViewModel) {
     val s by vm.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val fragmentActivity = remember(context) { context.findFragmentActivity() }
+
+    // Biometric prompt at startup
+    LaunchedEffect(s.currentScreen, s.isBiometricEnabled) {
+        if (s.currentScreen == Screen.Splash && s.isBiometricEnabled && fragmentActivity != null) {
+            vm.showBiometricPrompt(fragmentActivity)
+        }
+    }
 
     // Reazione ai messaggi
     LaunchedEffect(s.error, s.successMessage) {
