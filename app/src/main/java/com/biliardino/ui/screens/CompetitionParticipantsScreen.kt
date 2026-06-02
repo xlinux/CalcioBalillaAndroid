@@ -79,7 +79,7 @@ fun CompetitionParticipantsScreen(
             }
         }
 
-        if (s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER") {
+        if ((s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER") && competition.registrationOpen) {
             FloatingActionButton(
                 onClick = {
                     showAddDialog = true

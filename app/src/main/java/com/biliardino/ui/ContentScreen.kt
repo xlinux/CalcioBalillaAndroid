@@ -15,13 +15,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import com.biliardino.R
+import it.gestionecampionati.app.R
 import com.biliardino.ui.screens.*
 import com.biliardino.ui.components.*
 import com.biliardino.viewmodel.AppViewModel
@@ -70,12 +67,12 @@ fun ContentScreen(vm: AppViewModel) {
                         if (s.currentUser != null || (s.currentScreen !is Screen.PublicLeagues && s.currentScreen !is Screen.AuthMenu)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Image(
-                                    painter = painterResource(id = R.drawable.ic_app_logo),
+                                    painter = painterResource(id = R.drawable.ic_app_logo_old2),
                                     contentDescription = null,
                                     modifier = Modifier.size(24.dp).clip(CircleShape)
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Text("Leghe Calcio Balilla", style = MaterialTheme.typography.labelSmall)
+                                Text("Gestione Campionato Coppe", style = MaterialTheme.typography.labelSmall)
                                 Spacer(Modifier.width(8.dp))
                             }
                         } else {
@@ -253,7 +250,7 @@ fun ContentScreen(vm: AppViewModel) {
 }
 
 private fun getScreenTitle(screen: Screen): String = when (screen) {
-    is Screen.Splash -> "Biliardino"
+    is Screen.Splash -> "CampionatoCoppe"
     is Screen.PublicLeagues -> "Leghe Pubbliche"
     is Screen.AuthMenu -> "Benvenuto"
     is Screen.MyLeagues -> "Le mie Leghe"

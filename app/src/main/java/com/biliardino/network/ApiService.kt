@@ -147,6 +147,9 @@ interface CompetitionApi {
     @PUT("competitions/{competitionId}/close")
     suspend fun closeCompetition(@Path("competitionId") competitionId: Long): CompetitionResponse
 
+    @POST("competitions/{competitionId}/registration/close")
+    suspend fun closeRegistration(@Path("competitionId") competitionId: Long): CompetitionResponse
+
     @POST("competitions/{competitionId}/recalculate")
     suspend fun recalculateCompetition(@Path("competitionId") competitionId: Long)
 

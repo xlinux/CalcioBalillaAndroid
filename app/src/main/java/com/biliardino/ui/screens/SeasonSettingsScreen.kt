@@ -6,7 +6,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.biliardino.model.CompetitionResponse
 import com.biliardino.model.LeagueResponse
@@ -19,6 +21,7 @@ import com.biliardino.viewmodel.UiState
 @Composable
 fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competition: CompetitionResponse?, s: UiState, vm: AppViewModel) {
     var showCloseCompetitionConfirmation by remember { mutableStateOf(false) }
+    var showCloseRegistrationConfirmation by remember { mutableStateOf(false) }
     var showGenerateDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -31,38 +34,45 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
             .fillMaxSize()
             .padding(16.dp)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         if (competition != null) {
-            Text(
-                text = "Dettagli Competizione",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = competition.name,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Configurazione e strumenti di gestione",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             InfoCard(
                 title = "Informazioni Generali",
+                description = "Dettagli principali della competizione e stato attuale delle iscrizioni.",
                 items = mutableListOf(
                     "Nome" to competition.name,
                     "Sport" to (competition.sportName ?: "Calcio Balilla"),
-                    "Tipo" to if (competition.type == "LEAGUE") "Campionato" else "Torneo",
-                    "Modalità Creazione" to competition.matchCreationMode,
-                    "Generazione Calendario" to if (competition.calendarGenerationMode == "ROUNDS") "A giornate" else "Sequenziale",
-                    "Modalità Match" to when(competition.matchType) {
-                        "SINGLE" -> "Singolo (1vs1)"
-                        "DOUBLE" -> "Doppio (2vs2)"
-                        "TEAM" -> "Squadra"
-                        else -> competition.matchType
-                    },
+                    "Tipo" to if (competition.type == "LEAGUE") "Campionato (Girone)" else "Torneo (Eliminazione)",
                     "Data Inizio" to DateUtils.formatDate(competition.startDate),
-                    "Data Fine" to DateUtils.formatDate(competition.endDate),
-                    "Stato" to if (competition.status == "ACTIVE" || competition.status == null) "Attiva" else "Conclusa"
+                    "Stato" to (if (competition.status == "ACTIVE" || competition.status == null) "Attiva" else "Conclusa"),
+                    "Iscrizioni" to (if (competition.registrationOpen) "🟢 Aperte" else "🔒 Chiuse")
                 )
             )
 
             InfoCard(
-                title = "Regole del Match",
+                title = "Regole e Formato",
+                description = "Parametri di gioco e sistema di punteggio applicato ai match.",
                 items = mutableListOf<Pair<String, String>>().apply {
+                    add("Modalità Match" to when(competition.matchType) {
+                        "SINGLE" -> "Singolo (1vs1)"
+                        "DOUBLE" -> "Doppio (2vs2)"
+                        "TEAM" -> "Squadra"
+                        else -> competition.matchType
+                    })
                     add("Formato" to if (competition.matchFormat == "POINTS") "A Punti" else "A Set")
                     if (competition.matchFormat == "POINTS" && competition.useTargetScore) {
                         add("Punteggio Target" to "${competition.targetScore} punti")
@@ -75,8 +85,11 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
             )
 
             InfoCard(
-                title = "Sistema Classifica",
+                title = "Logistica e Ranking",
+                description = "Impostazioni sulla generazione degli incontri e calcolo delle classifiche.",
                 items = mutableListOf(
+                    "Creazione Match" to if (competition.matchCreationMode == "FREE") "Libera (gli utenti inseriscono i risultati)" else "Programmata (admin genera calendario)",
+                    "Calendario" to if (competition.calendarGenerationMode == "ROUNDS") "A giornate" else "Sequenziale",
                     "Tipo Ranking" to when(competition.competitionRankingType) {
                         "POINTS" -> "Punti Classifica"
                         "ELO" -> "Sistema ELO"
@@ -84,79 +97,49 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                         else -> competition.competitionRankingType
                     },
                     "Visibilità" to when(competition.rankingMode) {
-                        "PLAYER" -> "Solo Giocatori"
-                        "TEAM" -> "Solo Squadre"
-                        else -> "Giocatori e Squadre"
+                        "PLAYER" -> "Solo Classifica Giocatori"
+                        "TEAM" -> "Solo Classifica Squadre"
+                        else -> "Entrambe le Classifiche"
                     }
-                ).apply {
-                    if (competition.competitionRankingType == "POINTS") {
-                        add("Punti Vittoria" to "${competition.winPoints} pt")
-                        if (competition.allowDraw) {
-                            add("Punti Pareggio" to "${competition.drawPoints} pt")
-                        }
-                        add("Punti Sconfitta" to "${competition.lossPoints} pt")
-                    }
-                }
+                )
             )
             
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-
             val isAdminOrOwner = s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER"
             if (isAdminOrOwner) {
-                Button(
+                Text(
+                    "Azioni di Gestione",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+
+                AdminActionCard(
+                    title = "Partecipanti e Squadre",
+                    description = "Aggiungi o rimuovi giocatori e gestisci le formazioni delle squadre.",
+                    buttonText = "GESTISCI",
                     onClick = {
                         vm.navigateTo(Screen.CompetitionParticipants(league, season, competition))
                         vm.loadCompetitionPlayers(competition.id)
                     },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    Text(
-                        "GESTISCI PARTECIPANTI",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                    color = MaterialTheme.colorScheme.secondary
+                )
 
                 if (competition.matchCreationMode == "SCHEDULED" && competition.type == "LEAGUE") {
-                    Spacer(Modifier.height(8.dp))
                     val canGenerate = competition.active != false &&
                             s.seasonTeams.size >= 2 &&
                             s.seasonMatches.isEmpty()
-
-                    Button(
+                    
+                    AdminActionCard(
+                        title = "Generazione Calendario",
+                        description = "Crea automaticamente tutti gli incontri basandoti sulle squadre iscritte. Questa operazione richiede almeno 2 squadre.",
+                        buttonText = "GENERA CALENDARIO",
                         onClick = { showGenerateDialog = true },
                         enabled = canGenerate,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        shape = MaterialTheme.shapes.medium
-                    ) {
-                        Text(
-                            "GENERA CALENDARIO",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    if (s.seasonMatches.isNotEmpty()) {
-                        Text(
-                            "Calendario già generato.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    } else if (s.seasonTeams.size < 2) {
-                        Text(
-                            "Servono almeno 2 squadre.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
+                        statusText = if (s.seasonMatches.isNotEmpty()) "Calendario già generato." else if (s.seasonTeams.size < 2) "Servono almeno 2 squadre." else null
+                    )
                 }
 
                 if (competition.type == "CUP") {
-                    Spacer(Modifier.height(8.dp))
                     val validEntryCounts = listOf(4, 8, 16, 32)
                     val canGenerateBracket = competition.active != false &&
                             s.seasonTeams.size in validEntryCounts &&
@@ -164,35 +147,14 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
 
                     var showGenerateBracketDialog by remember { mutableStateOf(false) }
 
-                    Button(
+                    AdminActionCard(
+                        title = "Generazione Tabellone",
+                        description = "Crea il tabellone del torneo a eliminazione diretta. Richiede esattamente 4, 8, 16 o 32 squadre.",
+                        buttonText = "GENERA TABELLONE",
                         onClick = { showGenerateBracketDialog = true },
                         enabled = canGenerateBracket,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        shape = MaterialTheme.shapes.medium
-                    ) {
-                        Text(
-                            "GENERA TABELLONE",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    
-                    if (s.seasonMatches.isNotEmpty()) {
-                        Text(
-                            "Tabellone già generato.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    } else if (s.seasonTeams.size !in validEntryCounts) {
-                        Text(
-                            "Servono 4, 8, 16 o 32 squadre.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
+                        statusText = if (s.seasonMatches.isNotEmpty()) "Tabellone già generato." else if (s.seasonTeams.size !in validEntryCounts) "Servono 4, 8, 16 o 32 squadre." else null
+                    )
 
                     if (showGenerateBracketDialog) {
                         AlertDialog(
@@ -215,43 +177,34 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                         )
                     }
                 }
-            }
-        }
 
-        // Close Competition Action at the end
-        if (competition != null && (competition.status == "ACTIVE" || competition.status == null)) {
-            val isAdminOrOwner = s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER"
-            if (isAdminOrOwner) {
-                Spacer(Modifier.height(24.dp))
-                
-                Button(
-                    onClick = { vm.recalculateCompetition(competition.id) },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    Text(
-                        "RICALCOLA PUNTI",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                if (competition.status == "ACTIVE" || competition.status == null) {
+                    if (competition.registrationOpen) {
+                        AdminActionCard(
+                            title = "Chiusura Iscrizioni",
+                            description = "Disabilita la possibilità per nuovi giocatori di unirsi o creare squadre. Usa questa azione prima di generare il calendario.",
+                            buttonText = "CHIUDI ISCRIZIONI",
+                            onClick = { showCloseRegistrationConfirmation = true },
+                            color = Color(0xFFF57C00)
+                        )
+                    }
+
+                    AdminActionCard(
+                        title = "Manutenzione Punteggi",
+                        description = "Ricalcola tutti i punti della classifica basandoti sullo storico dei match. Utile in caso di anomalie nei punteggi.",
+                        buttonText = "RICALCOLA PUNTI",
+                        onClick = { vm.recalculateCompetition(competition.id) },
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+
+                    AdminActionCard(
+                        title = "Termina Competizione",
+                        description = "Chiude definitivamente la competizione. Non sarà più possibile aggiungere match o modificare risultati.",
+                        buttonText = "CHIUDI COMPETIZIONE",
+                        onClick = { showCloseCompetitionConfirmation = true },
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
-                
-                Spacer(Modifier.height(12.dp))
-
-                Button(
-                    onClick = { showCloseCompetitionConfirmation = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    Text(
-                        "CHIUDI COMPETIZIONE",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Spacer(Modifier.height(16.dp))
             }
         }
     }
@@ -300,10 +253,34 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
             }
         )
     }
+
+    if (showCloseRegistrationConfirmation && competition != null) {
+        AlertDialog(
+            onDismissRequest = { showCloseRegistrationConfirmation = false },
+            title = { Text("Chiudere le Iscrizioni?") },
+            text = { Text("Sei sicuro di voler chiudere le iscrizioni per '${competition.name}'? Una volta chiuse, non sarà più possibile aggiungere nuovi partecipanti o squadre.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vm.closeRegistration(league, season, competition)
+                        showCloseRegistrationConfirmation = false
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFF57C00))
+                ) {
+                    Text("SÌ, CHIUDI ISCRIZIONI")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCloseRegistrationConfirmation = false }) {
+                    Text("ANNULLA")
+                }
+            }
+        )
+    }
 }
 
 @Composable
-fun InfoCard(title: String, items: List<Pair<String, String>>) {
+fun InfoCard(title: String, description: String? = null, items: List<Pair<String, String>>) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium
@@ -315,8 +292,16 @@ fun InfoCard(title: String, items: List<Pair<String, String>>) {
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            items.forEach { (label, value) ->
+            if (description != null) {
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+            HorizontalDivider(Modifier.padding(vertical = 12.dp))
+            items.forEachIndexed { index, (label, value) ->
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -326,6 +311,57 @@ fun InfoCard(title: String, items: List<Pair<String, String>>) {
                     Text(text = label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(text = value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun AdminActionCard(
+    title: String,
+    description: String,
+    buttonText: String,
+    onClick: () -> Unit,
+    color: Color = MaterialTheme.colorScheme.primary,
+    enabled: Boolean = true,
+    statusText: String? = null
+) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
+            Button(
+                onClick = onClick,
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = color),
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Text(buttonText, fontWeight = FontWeight.Bold)
+            }
+
+            if (statusText != null) {
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }

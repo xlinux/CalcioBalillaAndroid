@@ -162,19 +162,39 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val refreshToken = auth.refreshToken ?: jwt
             viewModelScope.launch {
                 sessionManager.saveTokens(jwt, refreshToken)
-                loadCurrentUser()
                 
-                val s = _state.value
-                val showBioPrompt = s.canUseBiometrics && !s.isBiometricEnabled
-
-                _state.value = s.copy(
-                    currentUser = auth.copy(token = jwt, refreshToken = refreshToken),
-                    loading = false,
-                    currentScreen = Screen.MyLeagues,
-                    successMessage = customMessage ?: "Login effettuato con successo!",
-                    showBiometricSetupPrompt = showBioPrompt
-                )
-                loadMyLeagues()
+                // Fetch full user data which should include the correct authProvider
+                runCatching { ApiClientBase.userSettings.getMe() }
+                    .onSuccess { me ->
+                        val showBioPrompt = _state.value.canUseBiometrics && !_state.value.isBiometricEnabled
+                        _state.value = _state.value.copy(
+                            currentUser = AuthResponse(
+                                jwt = jwt,
+                                refreshToken = refreshToken,
+                                userId = me.id,
+                                name = me.username ?: "Utente",
+                                email = me.email,
+                                authProvider = me.authProvider ?: auth.authProvider
+                            ),
+                            loading = false,
+                            currentScreen = Screen.MyLeagues,
+                            successMessage = customMessage ?: "Login effettuato con successo!",
+                            showBiometricSetupPrompt = showBioPrompt
+                        )
+                        loadMyLeagues()
+                    }
+                    .onFailure { e ->
+                        // If loadCurrentUser fails, at least set the basic info from AuthResponse
+                        val showBioPrompt = _state.value.canUseBiometrics && !_state.value.isBiometricEnabled
+                        _state.value = _state.value.copy(
+                            currentUser = auth.copy(token = jwt, refreshToken = refreshToken),
+                            loading = false,
+                            currentScreen = Screen.MyLeagues,
+                            successMessage = customMessage ?: "Login effettuato!",
+                            showBiometricSetupPrompt = showBioPrompt
+                        )
+                        loadMyLeagues()
+                    }
             }
         } else {
             _state.value = _state.value.copy(loading = false, error = "Errore: token mancante")
@@ -189,9 +209,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }.onSuccess { auth ->
             // Save credentials for biometric before handling success
             sessionManager.saveCredentials(s.email, s.password)
-            handleSuccessfulLogin(auth)
+            // Ensure authProvider is set to LOCAL for standard login
+            val enrichedAuth = if (auth.authProvider == null) auth.copy(authProvider = "LOCAL") else auth
+            handleSuccessfulLogin(enrichedAuth)
         }.onFailure { e ->
-            _state.value = _state.value.copy(loading = false, error = "Login fallito: ${e.getErrorMessage()}")
+            val errorMsg = e.getErrorMessage()
+            val finalMsg = if (errorMsg.contains("GOOGLE", ignoreCase = true) || errorMsg.contains("APPLE", ignoreCase = true)) {
+                "Questo account usa l'accesso tramite Google/Apple. Usa il relativo pulsante di login."
+            } else {
+                "Login fallito: $errorMsg"
+            }
+            _state.value = _state.value.copy(loading = false, error = finalMsg)
         }
     }
 
@@ -222,7 +250,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 ApiClientBase.auth.googleLogin(GoogleLoginRequest(idToken))
             }.onSuccess { auth ->
                 auth.email?.let { sessionManager.saveCredentials(it, "OAUTH_GOOGLE") }
-                handleSuccessfulLogin(auth, "Login Google completato!")
+                // Ensure authProvider is set to GOOGLE if it's missing from response
+                val enrichedAuth = if (auth.authProvider == null) auth.copy(authProvider = "GOOGLE") else auth
+                handleSuccessfulLogin(enrichedAuth, "Login Google completato!")
             }.onFailure { e ->
                 Log.e("AppViewModel", "Backend Google Login failed", e)
                 _state.value = _state.value.copy(loading = false, error = "Login Google fallito (Backend): ${e.getErrorMessage()}")
@@ -245,7 +275,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             ApiClientBase.auth.register(RegisterRequest(s.username, s.email, s.password))
         }.onSuccess { auth ->
             sessionManager.saveCredentials(s.email, s.password)
-            handleSuccessfulLogin(auth, "Registrazione completata!")
+            // Ensure authProvider is set to LOCAL for registration
+            val enrichedAuth = if (auth.authProvider == null) auth.copy(authProvider = "LOCAL") else auth
+            handleSuccessfulLogin(enrichedAuth, "Registrazione completata!")
         }.onFailure { e ->
             _state.value = _state.value.copy(loading = false, error = "Registrazione fallita: ${e.getErrorMessage()}")
         }
@@ -692,6 +724,26 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
     }
 
+    fun closeRegistration(league: LeagueResponse, season: SeasonResponse, competition: CompetitionResponse) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.competitions.closeRegistration(competition.id) }
+            .onSuccess { updatedCompetition ->
+                _state.value = _state.value.copy(
+                    successMessage = "Iscrizioni chiuse con successo!",
+                    loading = false,
+                    currentCompetition = updatedCompetition
+                )
+                // Aggiorniamo anche la lista in UiState
+                val updatedList = _state.value.competitions.map { 
+                    if (it.id == updatedCompetition.id) updatedCompetition else it 
+                }
+                _state.value = _state.value.copy(competitions = updatedList)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore chiusura iscrizioni: ${e.getErrorMessage()}")
+            }
+    }
+
     fun recalculateCompetition(competitionId: Long) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.competitions.recalculateCompetition(competitionId) }
@@ -974,7 +1026,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         refreshToken = currentAuth?.refreshToken,
                         userId = me.id,
                         name = me.username ?: "Utente",
-                        email = me.email
+                        email = me.email,
+                        authProvider = me.authProvider
                     ),
                     loading = false
                 )

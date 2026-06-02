@@ -10,7 +10,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.biliardino.ui.ContentScreen
-import com.biliardino.ui.theme.BiliardinoTheme
+import com.biliardino.ui.theme.CampionatoCoppeTheme
 import com.biliardino.viewmodel.AppViewModel
 
 class MainActivity : FragmentActivity() {
@@ -26,7 +26,7 @@ class MainActivity : FragmentActivity() {
                 else -> isSystemInDarkTheme()
             }
 
-            BiliardinoTheme(darkTheme = isDarkTheme) {
+            CampionatoCoppeTheme(darkTheme = isDarkTheme) {
                 Surface {
                     ContentScreen(vm)
                 }

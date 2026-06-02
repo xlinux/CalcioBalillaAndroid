@@ -7,46 +7,58 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.biliardino.R
+import it.gestionecampionati.app.R
 
 @Composable
 fun SplashScreen() {
     Box(
         Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface), 
+            .background(Color(0xFF0B0B0B)), // Sfondo scuro per risaltare il nuovo logo
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
             Image(
                 painter = painterResource(id = R.drawable.ic_app_logo),
                 contentDescription = "App Logo",
                 modifier = Modifier
-                    .size(200.dp)
-                    .clip(MaterialTheme.shapes.large),
-                contentScale = ContentScale.Crop
+                    .size(260.dp),
+                contentScale = ContentScale.Fit
             )
-            Spacer(Modifier.height(24.dp))
+            
+            Spacer(Modifier.height(32.dp))
+            
             Text(
-                text = "Leghe Calcio Balilla",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                text = "GESTIONE",
+                style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 4.sp),
+                color = Color.White.copy(alpha = 0.6f)
             )
-            Spacer(Modifier.height(8.dp))
-            CircularProgressIndicator(
-                modifier = Modifier.size(32.dp),
-                strokeWidth = 3.dp,
-                color = MaterialTheme.colorScheme.primary
+            
+            Text(
+                text = "CAMPIONATO COPPE",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color.White
             )
         }
+        
+        CircularProgressIndicator(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 80.dp)
+                .size(32.dp),
+            strokeWidth = 2.dp,
+            color = MaterialTheme.colorScheme.primary
+        )
     }
 }
 

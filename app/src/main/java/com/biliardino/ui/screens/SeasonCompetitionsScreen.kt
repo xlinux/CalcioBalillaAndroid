@@ -146,6 +146,7 @@ fun SeasonCompetitionsScreen(
                         }
                         competitionToJoin = null
                     },
+                    enabled = competitionToJoin?.registrationOpen != false,
                     shape = MaterialTheme.shapes.large
                 ) {
                     Text("Partecipa")
@@ -222,6 +223,7 @@ fun CompetitionCard(competition: CompetitionResponse, onClick: () -> Unit) {
                     ) {
                         CompetitionInfoChip(typeLabel, accentColor)
                         CompetitionInfoChip(rankingLabel, MaterialTheme.colorScheme.tertiary)
+                        RegistrationStatusChip(competition.registrationOpen)
                     }
                 }
             }
@@ -270,6 +272,22 @@ fun CompetitionCard(competition: CompetitionResponse, onClick: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RegistrationStatusChip(isOpen: Boolean) {
+    Surface(
+        color = (if (isOpen) Color(0xFF4CAF50) else Color(0xFF757575)).copy(alpha = 0.12f),
+        shape = androidx.compose.foundation.shape.CircleShape
+    ) {
+        Text(
+            text = if (isOpen) "🟢 Iscrizioni aperte" else "🔒 Iscrizioni chiuse",
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = if (isOpen) Color(0xFF2E7D32) else Color(0xFF424242),
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 

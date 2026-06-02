@@ -6,14 +6,14 @@ plugins {
 }
 
 android {
-    namespace = "com.biliardino"
-    compileSdk = 34
+    namespace = "it.gestionecampionati.app"
+    compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.biliardino"
+        applicationId = "it.gestionecampionati.app"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 2
+        targetSdk = 35
+        versionCode = 4
         versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

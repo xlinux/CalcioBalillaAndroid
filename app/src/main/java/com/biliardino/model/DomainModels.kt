@@ -29,7 +29,8 @@ data class AuthResponse(
     val refreshToken: String? = null,
     val userId: Long,
     val name: String? = null,
-    val email: String? = null
+    val email: String? = null,
+    val authProvider: String? = null
 )
 
 @Serializable
@@ -41,7 +42,8 @@ data class RefreshRequest(
 data class MeResponse(
     val id: Long,
     val username: String? = null,
-    val email: String
+    val email: String,
+    val authProvider: String? = null
 )
 
 @Serializable
@@ -152,7 +154,8 @@ data class CompetitionResponse(
     val homeAndAway: Boolean = false,
     val currentUserJoined: Boolean = false,
     val matchCreationMode: String = "FREE",
-    val calendarGenerationMode: String = "SEQUENTIAL"
+    val calendarGenerationMode: String = "SEQUENTIAL",
+    val registrationOpen: Boolean = true
 )
 
 @Serializable

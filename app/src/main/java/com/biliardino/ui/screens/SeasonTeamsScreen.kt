@@ -107,6 +107,8 @@ fun SeasonTeamsScreen(league: LeagueResponse, season: SeasonResponse, competitio
                 
                 // Logic for showing Create Team button
                 val showCreateButton = when {
+                    // Competition must have registration open
+                    competition.registrationOpen == false -> false
                     // Competition must be active
                     competition.status != "ACTIVE" && competition.status != null -> false
                     // If matches already exist in a scheduled competition, no more teams/entries allowed

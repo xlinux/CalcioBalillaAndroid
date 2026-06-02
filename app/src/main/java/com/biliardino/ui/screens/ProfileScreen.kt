@@ -86,48 +86,65 @@ fun ProfileScreen(s: UiState, vm: AppViewModel) {
             }
         }
 
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Cambia Password", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                
-                OutlinedTextField(
-                    value = oldPassword,
-                    onValueChange = { oldPassword = it },
-                    label = { Text("Password Attuale") },
-                    modifier = Modifier.fillMaxWidth(),
-                    visualTransformation = PasswordVisualTransformation(),
-                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) }
-                )
+        if (s.currentUser?.authProvider == "LOCAL") {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Cambia Password", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    
+                    OutlinedTextField(
+                        value = oldPassword,
+                        onValueChange = { oldPassword = it },
+                        label = { Text("Password Attuale") },
+                        modifier = Modifier.fillMaxWidth(),
+                        visualTransformation = PasswordVisualTransformation(),
+                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) }
+                    )
 
-                OutlinedTextField(
-                    value = newPassword,
-                    onValueChange = { newPassword = it },
-                    label = { Text("Nuova Password") },
-                    modifier = Modifier.fillMaxWidth(),
-                    visualTransformation = PasswordVisualTransformation(),
-                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) }
-                )
+                    OutlinedTextField(
+                        value = newPassword,
+                        onValueChange = { newPassword = it },
+                        label = { Text("Nuova Password") },
+                        modifier = Modifier.fillMaxWidth(),
+                        visualTransformation = PasswordVisualTransformation(),
+                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) }
+                    )
 
-                OutlinedTextField(
-                    value = confirmPassword,
-                    onValueChange = { confirmPassword = it },
-                    label = { Text("Conferma Nuova Password") },
-                    modifier = Modifier.fillMaxWidth(),
-                    visualTransformation = PasswordVisualTransformation(),
-                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) }
-                )
+                    OutlinedTextField(
+                        value = confirmPassword,
+                        onValueChange = { confirmPassword = it },
+                        label = { Text("Conferma Nuova Password") },
+                        modifier = Modifier.fillMaxWidth(),
+                        visualTransformation = PasswordVisualTransformation(),
+                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) }
+                    )
 
-                Button(
-                    onClick = { 
-                        vm.changePassword(oldPassword, newPassword)
-                        oldPassword = ""
-                        newPassword = ""
-                        confirmPassword = ""
-                    },
-                    enabled = oldPassword.isNotBlank() && newPassword.isNotBlank() && newPassword == confirmPassword,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Cambia Password")
+                    Button(
+                        onClick = { 
+                            vm.changePassword(oldPassword, newPassword)
+                            oldPassword = ""
+                            newPassword = ""
+                            confirmPassword = ""
+                        },
+                        enabled = oldPassword.isNotBlank() && newPassword.isNotBlank() && newPassword == confirmPassword,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Cambia Password")
+                    }
+                }
+            }
+        } else if (s.currentUser?.authProvider != null) {
+            // Se l'utente è Google o Apple, mostriamo un avviso chiaro
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(16.dp))
+                    Text(
+                        "Questo account usa l'accesso tramite ${s.currentUser.authProvider}. La password viene gestita dal provider esterno.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
             }
         }
