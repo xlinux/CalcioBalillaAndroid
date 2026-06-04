@@ -118,8 +118,8 @@ fun ContentScreen(vm: AppViewModel) {
                             }) {
                                 Icon(Icons.Default.Person, contentDescription = "Profilo")
                             }
+                            TextButton(onClick = vm::logout) { Text("Logout") }
                         }
-                        TextButton(onClick = vm::logout) { Text("Logout") }
                     } else if (s.currentScreen is Screen.PublicLeagues) {
                         TextButton(onClick = { vm.navigateTo(Screen.AuthMenu) }) { Text("Accedi") }
                     }
@@ -210,7 +210,7 @@ fun ContentScreen(vm: AppViewModel) {
                 when (screen) {
                     is Screen.Splash -> SplashScreen()
                     is Screen.PublicLeagues -> PublicLeaguesScreen(s, vm)
-                    is Screen.AuthMenu -> AuthScreen(s, vm)
+                    is Screen.AuthMenu -> AuthScreen(vm)
                     is Screen.MyLeagues -> MyLeaguesScreen(s, vm)
                     is Screen.Profile -> ProfileScreen(s, vm)
                     is Screen.LeagueSeasons -> LeagueSeasonsScreen(screen.league, s, vm)

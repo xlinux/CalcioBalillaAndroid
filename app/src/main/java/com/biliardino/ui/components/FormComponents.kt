@@ -27,17 +27,20 @@ import com.biliardino.model.TeamResponse
 fun SearchableTeamDropdown(
     teams: List<TeamResponse>,
     selectedTeam: TeamResponse?,
+    isTeamType: Boolean = false,
     onTeamSelected: (TeamResponse) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     
-    val filteredTeams = remember(searchQuery, teams) {
+    val filteredTeams = remember(searchQuery, teams, isTeamType) {
         if (searchQuery.isBlank()) teams
         else teams.filter { team ->
             team.name.contains(searchQuery, ignoreCase = true) ||
-            (team.playerAUsername?.contains(searchQuery, ignoreCase = true) ?: false) ||
-            (team.playerBUsername?.contains(searchQuery, ignoreCase = true) ?: false)
+            (!isTeamType && (
+                (team.playerAUsername?.contains(searchQuery, ignoreCase = true) ?: false) ||
+                (team.playerBUsername?.contains(searchQuery, ignoreCase = true) ?: false)
+            ))
         }
     }
 
@@ -66,7 +69,7 @@ fun SearchableTeamDropdown(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(8.dp),
-                placeholder = { Text("Cerca squadra o giocatore...") },
+                placeholder = { Text(if (isTeamType) "Cerca squadra..." else "Cerca squadra o giocatore...") },
                 leadingIcon = { Icon(Icons.Default.Search, null) },
                 singleLine = true
             )
@@ -83,10 +86,12 @@ fun SearchableTeamDropdown(
                         text = {
                             Column {
                                 Text(team.name, fontWeight = FontWeight.Bold)
-                                Text(
-                                    "${team.playerAUsername} & ${team.playerBUsername}",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
+                                if (!isTeamType && (team.playerAUsername != null || team.playerBUsername != null)) {
+                                    Text(
+                                        "${team.playerAUsername ?: ""} & ${team.playerBUsername ?: ""}",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
                             }
                         },
                         onClick = {

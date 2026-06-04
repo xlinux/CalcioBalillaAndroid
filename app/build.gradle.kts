@@ -13,7 +13,7 @@ android {
         applicationId = "it.gestionecampionati.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
+        versionCode = 7
         versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -81,7 +81,6 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
 
     implementation("androidx.biometric:biometric:1.1.0")
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     implementation("androidx.credentials:credentials:1.2.2")

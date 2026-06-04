@@ -5,12 +5,6 @@ import okhttp3.MultipartBody
 import retrofit2.http.*
 
 interface AuthApi {
-    @POST("auth/register")
-    suspend fun register(@Body request: RegisterRequest): AuthResponse
-
-    @POST("auth/login")
-    suspend fun login(@Body request: LoginRequest): AuthResponse
-
     @POST("auth/oauth/google")
     suspend fun googleLogin(@Body request: GoogleLoginRequest): AuthResponse
 
@@ -25,8 +19,8 @@ interface UserSettingsApi {
     @PUT("me/profile")
     suspend fun updateProfile(@Body request: UpdateProfileRequest): MeResponse
 
-    @PUT("me/password")
-    suspend fun changePassword(@Body request: ChangePasswordRequest)
+    @DELETE("me")
+    suspend fun deleteAccount()
 }
 
 interface LeagueApi {
@@ -59,9 +53,6 @@ interface LeagueApi {
 
     @GET("leghe/{leagueId}/membri")
     suspend fun getLeagueMembers(@Path("leagueId") leagueId: Long): List<LeagueMemberResponse>
-
-    @GET("leagues/{leagueId}/members")
-    suspend fun getLeagueMembersForCompetitionPicker(@Path("leagueId") leagueId: Long): List<LeagueMemberResponse>
 
     @PUT("leghe/{leagueId}/membri/{userId}/role")
     suspend fun updateMemberRole(
@@ -158,6 +149,9 @@ interface CompetitionApi {
 
     @POST("competitions/{competitionId}/bracket/generate")
     suspend fun generateBracket(@Path("competitionId") competitionId: Long)
+
+    @DELETE("competitions/{competitionId}")
+    suspend fun deleteCompetition(@Path("competitionId") competitionId: Long)
 
     @GET("competitions/{competitionId}/teams/{teamId}/statistics")
     suspend fun getTeamStatistics(

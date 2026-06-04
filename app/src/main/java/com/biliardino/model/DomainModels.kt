@@ -5,21 +5,8 @@ import kotlinx.serialization.Serializable
 // --- Auth ---
 
 @Serializable
-data class LoginRequest(
-    val email: String,
-    val password: String
-)
-
-@Serializable
 data class GoogleLoginRequest(
     val idToken: String
-)
-
-@Serializable
-data class RegisterRequest(
-    val name: String, // Changed from username
-    val email: String,
-    val password: String
 )
 
 @Serializable
@@ -50,12 +37,6 @@ data class MeResponse(
 data class UpdateProfileRequest(
     val username: String,
     val avatar: String? = null
-)
-
-@Serializable
-data class ChangePasswordRequest(
-    val oldPassword: String,
-    val newPassword: String
 )
 
 // --- Leghe ---

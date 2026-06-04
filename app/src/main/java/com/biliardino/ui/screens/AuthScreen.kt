@@ -2,19 +2,20 @@ package com.biliardino.ui.screens
 
 import android.content.Context
 import android.content.ContextWrapper
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.biliardino.viewmodel.AppViewModel
-import com.biliardino.viewmodel.UiState
+import it.gestionecampionati.app.R
 
 fun Context.findFragmentActivity(): FragmentActivity? {
     var currentContext = this
@@ -28,62 +29,84 @@ fun Context.findFragmentActivity(): FragmentActivity? {
 }
 
 @Composable
-fun AuthScreen(s: UiState, vm: AppViewModel) {
-    var isRegister by remember { mutableStateOf(false) }
+fun AuthScreen(vm: AppViewModel) {
     val context = LocalContext.current
     val fragmentActivity = remember(context) { context.findFragmentActivity() }
 
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.Center) {
-        if (isRegister) {
-            OutlinedTextField(s.username, vm::onUsernameChange, label = { Text("Username") }, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(8.dp))
-        }
-        OutlinedTextField(s.email, vm::onEmailChange, label = { Text("Email") }, modifier = Modifier.fillMaxWidth())
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = s.password,
-            onValueChange = vm::onPasswordChange,
-            label = { Text("Password") },
-            modifier = Modifier.fillMaxWidth(),
-            visualTransformation = PasswordVisualTransformation(),
-            trailingIcon = if (!isRegister && s.canUseBiometrics && s.isBiometricEnabled && fragmentActivity != null) {
-                {
-                    IconButton(onClick = { vm.showBiometricPrompt(fragmentActivity) }) {
-                        Icon(Icons.Default.Fingerprint, contentDescription = "Biometric Login", tint = MaterialTheme.colorScheme.primary)
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            // Sezione Superiore: Logo e Branding
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_app_logo),
+                    contentDescription = "App Logo",
+                    modifier = Modifier.size(160.dp)
+                )
+                
+                Spacer(Modifier.height(16.dp))
+                
+                Text(
+                    text = "Benvenuto",
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                
+                Text(
+                    text = "La tua piattaforma per la gestione di campionati e tornei",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(Modifier.height(32.dp))
+
+            // Sezione Centrale: Pulsante Google
+            if (fragmentActivity != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.extraLarge,
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Button(
+                        onClick = { vm.googleLogin(fragmentActivity) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    ) {
+                        Text(
+                            text = "Accedi con Google",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
-            } else null
-        )
-        Spacer(Modifier.height(16.dp))
-        
-        Button(onClick = { if (isRegister) vm.register() else vm.login() }, modifier = Modifier.fillMaxWidth()) {
-            Text(if (isRegister) "Registrati" else "Accedi")
-        }
-
-        if (!isRegister && fragmentActivity != null) {
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = { vm.googleLogin(fragmentActivity) },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Accedi con Google")
             }
-        }
 
-        if (s.canUseBiometrics && fragmentActivity != null && s.isBiometricEnabled) {
-            Spacer(Modifier.height(16.dp))
-            OutlinedButton(
-                onClick = { vm.showBiometricPrompt(fragmentActivity) },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Fingerprint, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(if (isRegister) "Usa Biometria per accedere" else "Accedi con Biometria / Touch ID")
-            }
-        }
-        
-        TextButton(onClick = { isRegister = !isRegister }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-            Text(if (isRegister) "Hai già un account? Accedi" else "Non hai un account? Registrati")
+            // Sezione Inferiore: Info
+            Text(
+                text = "Per garantire la massima sicurezza e velocità, l'accesso è consentito esclusivamente tramite account Google.",
+                style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.padding(top = 16.dp)
+            )
         }
     }
 }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -22,6 +23,7 @@ import com.biliardino.viewmodel.UiState
 fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competition: CompetitionResponse?, s: UiState, vm: AppViewModel) {
     var showCloseCompetitionConfirmation by remember { mutableStateOf(false) }
     var showCloseRegistrationConfirmation by remember { mutableStateOf(false) }
+    var showDeleteCompetitionConfirmation by remember { mutableStateOf(false) }
     var showGenerateDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -73,7 +75,7 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                         "TEAM" -> "Squadra"
                         else -> competition.matchType
                     })
-                    add("Formato" to if (competition.matchFormat == "POINTS") "A Punti" else "A Set")
+                    add("Formato" to if (competition.matchFormat == "POINTS") "A Punti" else if (competition.matchFormat == "GOALS") "Goal" else "A Set")
                     if (competition.matchFormat == "POINTS" && competition.useTargetScore) {
                         add("Punteggio Target" to "${competition.targetScore} punti")
                         if (competition.cappottoEnabled) {
@@ -141,8 +143,9 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
 
                 if (competition.type == "CUP") {
                     val validEntryCounts = listOf(4, 8, 16, 32)
+                    val teamsCount = s.seasonTeams.size
                     val canGenerateBracket = competition.active != false &&
-                            s.seasonTeams.size in validEntryCounts &&
+                            teamsCount in validEntryCounts &&
                             s.seasonMatches.isEmpty()
 
                     var showGenerateBracketDialog by remember { mutableStateOf(false) }
@@ -153,7 +156,13 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                         buttonText = "GENERA TABELLONE",
                         onClick = { showGenerateBracketDialog = true },
                         enabled = canGenerateBracket,
-                        statusText = if (s.seasonMatches.isNotEmpty()) "Tabellone già generato." else if (s.seasonTeams.size !in validEntryCounts) "Servono 4, 8, 16 o 32 squadre." else null
+                        statusText = if (s.seasonMatches.isNotEmpty()) "Tabellone già generato." else null
+                    )
+
+                    CupValidationSection(
+                        teams = s.seasonTeams,
+                        validCounts = validEntryCounts,
+                        isAlreadyGenerated = s.seasonMatches.isNotEmpty()
                     )
 
                     if (showGenerateBracketDialog) {
@@ -205,6 +214,14 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                         color = MaterialTheme.colorScheme.error
                     )
                 }
+
+                AdminActionCard(
+                    title = "Elimina Competizione",
+                    description = "Elimina definitivamente la competizione e tutti i dati collegati (partite, squadre, statistiche). Questa operazione non può essere annullata.",
+                    buttonText = "ELIMINA COMPETIZIONE",
+                    onClick = { showDeleteCompetitionConfirmation = true },
+                    color = MaterialTheme.colorScheme.error
+                )
             }
         }
     }
@@ -276,6 +293,152 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                 }
             }
         )
+    }
+
+    if (showDeleteCompetitionConfirmation && competition != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteCompetitionConfirmation = false },
+            title = { Text("Eliminare la Competizione?") },
+            text = { Text("Sei sicuro di voler eliminare questa competizione? Verranno eliminati anche partite, squadre, risultati e statistiche collegate. L'operazione non può essere annullata.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vm.deleteCompetition(league, season, competition.id)
+                        showDeleteCompetitionConfirmation = false
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("ELIMINA")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteCompetitionConfirmation = false }) {
+                    Text("ANNULLA")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun CupValidationSection(
+    teams: List<com.biliardino.model.TeamResponse>,
+    validCounts: List<Int>,
+    isAlreadyGenerated: Boolean
+) {
+    if (isAlreadyGenerated) return
+
+    val teamsCount = teams.size
+    val isValid = teamsCount in validCounts
+
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // 1. Numero squadre iscritte
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Squadre iscritte: ",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "$teamsCount",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (isValid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+
+            // 2. Stato validazione e 4. Suggerimento
+            if (isValid) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("✓", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Numero valido per generare il tabellone",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Text("⚠️", modifier = Modifier.padding(top = 2.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Numero non valido per una coppa a eliminazione diretta. Sono supportati: ${validCounts.joinToString(", ")} squadre.",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+
+                    val nextValid = validCounts.firstOrNull { it > teamsCount }
+                    val prevValid = validCounts.lastOrNull { it < teamsCount }
+
+                    if (nextValid != null || prevValid != null) {
+                        Text(
+                            "Per continuare:",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            prevValid?.let {
+                                Text(
+                                    "• rimuovere ${teamsCount - it} squadre per arrivare a $it",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            nextValid?.let {
+                                Text(
+                                    "• aggiungere ${it - teamsCount} squadre per arrivare a $it",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Elenco squadre partecipanti
+            if (teams.isNotEmpty()) {
+                HorizontalDivider(thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
+                Text(
+                    "Squadre partecipanti:",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    teams.forEach { team ->
+                        Text(
+                            "• ${team.name}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

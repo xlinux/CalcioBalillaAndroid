@@ -43,7 +43,7 @@ fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, 
         val isCup = competition.type == "CUP"
         
         val tabs = if (isCup) {
-            listOf("Tabellone")
+            listOf("Tabellone", "Squadre")
         } else {
             if (isTeamMatch) listOf("Classifica", "Squadre") else listOf("Classifica", "Giocatori", "Squadre")
         }
@@ -90,6 +90,7 @@ fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, 
                     1 -> {
                         val filteredTeams = s.seasonTeams
                             .filter { it.name.contains(searchQuery, ignoreCase = true) }
+                            .sortedBy { it.name }
                         SeasonTeamsScreen(league, season, competition, s.copy(seasonTeams = filteredTeams), vm)
                     }
                 }

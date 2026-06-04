@@ -7,11 +7,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -23,6 +26,7 @@ import com.biliardino.model.CompetitionTemplateResponse
 import com.biliardino.model.CreateCompetitionRequest
 import com.biliardino.model.LeagueResponse
 import com.biliardino.model.SeasonResponse
+import com.biliardino.model.SportResponse
 import com.biliardino.util.DateUtils
 import com.biliardino.viewmodel.AppViewModel
 import com.biliardino.viewmodel.UiState
@@ -39,6 +43,7 @@ fun CreateCompetitionScreen(
     s: UiState,
     vm: AppViewModel
 ) {
+    var currentStep by rememberSaveable { mutableIntStateOf(0) }
     var name by remember { mutableStateOf("") }
     var selectedType by remember { mutableStateOf("LEAGUE") }
     var selectedRankingMode by remember { mutableStateOf("BOTH") }
@@ -49,6 +54,7 @@ fun CreateCompetitionScreen(
     var matchCreationMode by remember { mutableStateOf("FREE") }
     var calendarGenerationMode by remember { mutableStateOf("ROUNDS") }
     var selectedSportId by remember { mutableStateOf<Long?>(null) }
+    var selectedTemplateSportId by remember { mutableStateOf<Long?>(null) }
     var joinCreator by remember { mutableStateOf(false) }
     var useTargetScore by remember { mutableStateOf(false) }
     var targetScore by remember { mutableStateOf(10) }
@@ -66,6 +72,7 @@ fun CreateCompetitionScreen(
     var copyFromCompetitionId by remember { mutableStateOf<Long?>(null) }
 
     fun applyTemplate(template: CompetitionTemplateResponse) {
+        selectedTemplateSportId = template.sportId
         name = template.competitionName
         selectedSportId = template.sportId
         selectedType = template.type
@@ -104,12 +111,6 @@ fun CreateCompetitionScreen(
         vm.loadSports()
     }
 
-    LaunchedEffect(s.competitionTemplates) {
-        if (selectedSportId == null && s.competitionTemplates.isNotEmpty()) {
-            applyTemplate(s.competitionTemplates.first())
-        }
-    }
-
     LaunchedEffect(copyParticipants, copyTeams, s.competitions) {
         val shouldCopy = copyParticipants || copyTeams
         if (!shouldCopy) {
@@ -126,15 +127,27 @@ fun CreateCompetitionScreen(
         validDates &&
         (!shouldCopy || copyFromCompetitionId != null) &&
         !s.loading
+    val canContinue = when (currentStep) {
+        0 -> name.trim().isNotEmpty() && selectedSportId != null
+        2 -> validDates && (!shouldCopy || copyFromCompetitionId != null)
+        else -> true
+    }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        modifier = Modifier.fillMaxSize()
     ) {
-        CreationSectionCard("Dettagli") {
+        CompetitionCreationProgress(currentStep)
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            when (currentStep) {
+                0 -> CreationSectionCard("Dettagli") {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -158,10 +171,25 @@ fun CreateCompetitionScreen(
                 }
             )
 
-            SportTemplatePicker(
-                templates = s.competitionTemplates,
+            SportPicker(
+                sports = s.sports,
                 selectedSportId = selectedSportId,
-                onSelected = { template -> applyTemplate(template) }
+                onSelected = {
+                    selectedSportId = it
+                    selectedTemplateSportId = null
+                }
+            )
+
+            CompetitionTemplatePicker(
+                templates = s.competitionTemplates,
+                selectedTemplateSportId = selectedTemplateSportId,
+                onSelected = { template ->
+                    if (template == null) {
+                        selectedTemplateSportId = null
+                    } else {
+                        applyTemplate(template)
+                    }
+                }
             )
 
             OptionRow(
@@ -178,6 +206,11 @@ fun CreateCompetitionScreen(
                 onSelected = { selectedMatchType = it }
             )
 
+            ToggleLine("Partecipo anche io", joinCreator) { joinCreator = it }
+                }
+
+                1 -> {
+        CreationSectionCard("Formato competizione") {
             OptionRow(
                 label = "Ranking",
                 options = listOf("POINTS" to "Punti", "ELO" to "ELO", "WIN_RATE" to "% vitt."),
@@ -196,8 +229,8 @@ fun CreateCompetitionScreen(
                 label = "Creazione partite",
                 options = listOf("FREE" to "Libera", "SCHEDULED" to "Calendario"),
                 selected = matchCreationMode,
-                onSelected = { 
-                    matchCreationMode = it 
+                onSelected = {
+                    matchCreationMode = it
                     if (it == "SCHEDULED" && selectedType == "LEAGUE" && homeAndAway) {
                         calendarGenerationMode = "ROUNDS"
                     }
@@ -212,8 +245,6 @@ fun CreateCompetitionScreen(
                     onSelected = { calendarGenerationMode = it }
                 )
             }
-
-            ToggleLine("Partecipo anche io", joinCreator) { joinCreator = it }
         }
 
         CreationSectionCard("Punti classifica") {
@@ -255,7 +286,9 @@ fun CreateCompetitionScreen(
                 }
             }
         }
+                }
 
+                2 -> {
         CreationSectionCard("Date") {
             var showStartPicker by remember { mutableStateOf(false) }
             var showEndPicker by remember { mutableStateOf(false) }
@@ -374,17 +407,39 @@ fun CreateCompetitionScreen(
                 }
             }
         }
-
-        Button(
-            onClick = {
-                val sportId = selectedSportId ?: return@Button
-                
-                // Forza ROUNDS se campionato andata/ritorno
-                val finalCalendarMode = if (selectedType == "LEAGUE" && homeAndAway) {
-                    "ROUNDS"
-                } else {
-                    calendarGenerationMode
                 }
+
+                3 -> CompetitionReview(
+                    name = name,
+                    type = selectedType,
+                    sport = s.sports.firstOrNull { it.id == selectedSportId }?.name
+                        ?: s.competitionTemplates.firstOrNull { it.sportId == selectedSportId }?.sportName
+                        ?: "Sport",
+                    rankingMode = selectedRankingMode,
+                    matchType = selectedMatchType,
+                    rankingType = selectedCompRankingType,
+                    matchFormat = selectedMatchFormat,
+                    startDate = startDate,
+                    endDate = endDate,
+                    joinCreator = joinCreator,
+                    copyParticipants = copyParticipants,
+                    copyTeams = copyTeams
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+        }
+
+        CompetitionCreationNavigation(
+            currentStep = currentStep,
+            canContinue = canContinue,
+            canCreate = canCreate,
+            loading = s.loading,
+            onBack = { currentStep = (currentStep - 1).coerceAtLeast(0) },
+            onNext = { currentStep = (currentStep + 1).coerceAtMost(3) },
+            onCreate = {
+                val sportId = selectedSportId ?: return@CompetitionCreationNavigation
+                val finalCalendarMode = if (selectedType == "LEAGUE" && homeAndAway) "ROUNDS" else calendarGenerationMode
 
                 vm.createCompetition(
                     league,
@@ -417,18 +472,213 @@ fun CreateCompetitionScreen(
                         homeAndAway = homeAndAway
                     )
                 )
-            },
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            enabled = canCreate,
-            shape = MaterialTheme.shapes.medium
-        ) {
-            Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Crea campionato", style = MaterialTheme.typography.titleMedium)
-        }
-
-        Spacer(Modifier.height(24.dp))
+            }
+        )
     }
+}
+
+@Composable
+private fun CompetitionCreationProgress(currentStep: Int) {
+    val steps = listOf("Dettagli", "Regole", "Date", "Riepilogo")
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp,
+        shadowElevation = 1.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        "Passaggio ${currentStep + 1} di ${steps.size}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        steps[currentStep],
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Text(
+                    "${((currentStep + 1) * 100) / steps.size}%",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            LinearProgressIndicator(
+                progress = { (currentStep + 1) / steps.size.toFloat() },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                steps.forEachIndexed { index, title ->
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (index <= currentStep) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        fontWeight = if (index == currentStep) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompetitionCreationNavigation(
+    currentStep: Int,
+    canContinue: Boolean,
+    canCreate: Boolean,
+    loading: Boolean,
+    onBack: () -> Unit,
+    onNext: () -> Unit,
+    onCreate: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 3.dp,
+        shadowElevation = 4.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (currentStep > 0) {
+                OutlinedButton(
+                    onClick = onBack,
+                    modifier = Modifier.height(50.dp),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Indietro")
+                }
+            }
+
+            Button(
+                onClick = if (currentStep == 3) onCreate else onNext,
+                enabled = if (currentStep == 3) canCreate else canContinue,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(50.dp),
+                shape = MaterialTheme.shapes.medium
+            ) {
+                if (loading && currentStep == 3) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else if (currentStep == 3) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(19.dp))
+                    Spacer(Modifier.width(7.dp))
+                    Text("Crea campionato")
+                } else {
+                    Text("Continua")
+                    Spacer(Modifier.width(7.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(19.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompetitionReview(
+    name: String,
+    type: String,
+    sport: String,
+    rankingMode: String,
+    matchType: String,
+    rankingType: String,
+    matchFormat: String,
+    startDate: String,
+    endDate: String,
+    joinCreator: Boolean,
+    copyParticipants: Boolean,
+    copyTeams: Boolean
+) {
+    CreationSectionCard("Riepilogo campionato") {
+        ReviewLine("Nome", name)
+        ReviewLine("Sport", sport)
+        ReviewLine("Tipo", type.creationLabel())
+        ReviewLine("Classifiche", rankingMode.creationLabel())
+        ReviewLine("Tipo partita", matchType.creationLabel())
+        ReviewLine("Ranking", rankingType.creationLabel())
+        ReviewLine("Formato", matchFormat.creationLabel())
+        ReviewLine("Periodo", "$startDate - $endDate")
+    }
+
+    CreationSectionCard("Partecipazione e copia") {
+        ReviewLine("Partecipo anche io", if (joinCreator) "Sì" else "No")
+        ReviewLine("Copia partecipanti", if (copyParticipants) "Sì" else "No")
+        ReviewLine("Copia squadre", if (copyTeams) "Sì" else "No")
+    }
+
+    Text(
+        "Controlla i dati prima di creare il campionato. Puoi tornare indietro senza perdere le impostazioni.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 4.dp)
+    )
+}
+
+@Composable
+private fun ReviewLine(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            label,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            value,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.End
+        )
+    }
+}
+
+private fun String.creationLabel(): String = when (this) {
+    "LEAGUE" -> "Campionato"
+    "CUP" -> "Torneo"
+    "PLAYER" -> "Giocatori"
+    "TEAM" -> "Squadre"
+    "BOTH" -> "Entrambe"
+    "SINGLE" -> "Singolo"
+    "DOUBLE" -> "Doppio"
+    "POINTS" -> "Punti"
+    "ELO" -> "ELO"
+    "WIN_RATE" -> "Percentuale vittorie"
+    "SETS" -> "Set"
+    "GOALS" -> "Gol"
+    else -> this
 }
 
 @Composable
@@ -480,19 +730,19 @@ private fun OptionRow(
 }
 
 @Composable
-private fun SportTemplatePicker(
-    templates: List<CompetitionTemplateResponse>,
+private fun SportPicker(
+    sports: List<SportResponse>,
     selectedSportId: Long?,
-    onSelected: (CompetitionTemplateResponse) -> Unit
+    onSelected: (Long) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val selectedTemplate = templates.firstOrNull { it.sportId == selectedSportId }
+    val selectedSport = sports.firstOrNull { it.id == selectedSportId }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("Sport", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-        if (templates.isEmpty()) {
+        if (sports.isEmpty()) {
             Text(
-                "Nessun template sport disponibile",
+                "Nessuno sport disponibile",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -504,7 +754,7 @@ private fun SportTemplatePicker(
                     shape = MaterialTheme.shapes.medium
                 ) {
                     Text(
-                        selectedTemplate?.sportName ?: "Seleziona sport",
+                        selectedSport?.name ?: "Seleziona sport",
                         modifier = Modifier.weight(1f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -512,11 +762,11 @@ private fun SportTemplatePicker(
                     Icon(Icons.Default.ChevronRight, contentDescription = null)
                 }
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    templates.forEach { template ->
+                    sports.filter { it.active }.forEach { sport ->
                         DropdownMenuItem(
-                            text = { Text(template.sportName) },
+                            text = { Text(sport.name) },
                             onClick = {
-                                onSelected(template)
+                                onSelected(sport.id)
                                 expanded = false
                             }
                         )
@@ -524,6 +774,58 @@ private fun SportTemplatePicker(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CompetitionTemplatePicker(
+    templates: List<CompetitionTemplateResponse>,
+    selectedTemplateSportId: Long?,
+    onSelected: (CompetitionTemplateResponse?) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedTemplate = templates.firstOrNull { it.sportId == selectedTemplateSportId }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Template sport", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+        Box(Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = { expanded = true },
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Text(
+                    selectedTemplate?.sportName ?: "Nessun template",
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Icon(Icons.Default.ChevronRight, contentDescription = null)
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                DropdownMenuItem(
+                    text = { Text("Nessun template") },
+                    onClick = {
+                        onSelected(null)
+                        expanded = false
+                    }
+                )
+                templates.forEach { template ->
+                    DropdownMenuItem(
+                        text = { Text(template.sportName) },
+                        onClick = {
+                            onSelected(template)
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
+        Text(
+            "Il template compila automaticamente formato e regole. Puoi lasciare questa scelta vuota.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

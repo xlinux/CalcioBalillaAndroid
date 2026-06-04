@@ -66,11 +66,6 @@ data class UiState(
     val newLeagueDescription: String = "",
     val inviteCode: String = "",
     
-    // Auth fields
-    val email: String = "",
-    val password: String = "",
-    val username: String = "",
-    
     val loading: Boolean = false,
     val error: String? = null,
     val successMessage: String? = null,
@@ -139,10 +134,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    fun onEmailChange(v: String) { _state.value = _state.value.copy(email = v) }
-    fun onPasswordChange(v: String) { _state.value = _state.value.copy(password = v) }
-    fun onUsernameChange(v: String) { _state.value = _state.value.copy(username = v) }
-
     fun onNewLeagueNameChange(v: String) { _state.value = _state.value.copy(newLeagueName = v) }
     fun onNewLeagueDescriptionChange(v: String) { _state.value = _state.value.copy(newLeagueDescription = v) }
     fun onInviteCodeChange(v: String) { _state.value = _state.value.copy(inviteCode = v) }
@@ -163,7 +154,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch {
                 sessionManager.saveTokens(jwt, refreshToken)
                 
-                // Fetch full user data which should include the correct authProvider
                 runCatching { ApiClientBase.userSettings.getMe() }
                     .onSuccess { me ->
                         val showBioPrompt = _state.value.canUseBiometrics && !_state.value.isBiometricEnabled
@@ -174,7 +164,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                                 userId = me.id,
                                 name = me.username ?: "Utente",
                                 email = me.email,
-                                authProvider = me.authProvider ?: auth.authProvider
+                                authProvider = "GOOGLE"
                             ),
                             loading = false,
                             currentScreen = Screen.MyLeagues,
@@ -187,7 +177,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         // If loadCurrentUser fails, at least set the basic info from AuthResponse
                         val showBioPrompt = _state.value.canUseBiometrics && !_state.value.isBiometricEnabled
                         _state.value = _state.value.copy(
-                            currentUser = auth.copy(token = jwt, refreshToken = refreshToken),
+                            currentUser = auth.copy(token = jwt, refreshToken = refreshToken, authProvider = "GOOGLE"),
                             loading = false,
                             currentScreen = Screen.MyLeagues,
                             successMessage = customMessage ?: "Login effettuato!",
@@ -198,28 +188,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
         } else {
             _state.value = _state.value.copy(loading = false, error = "Errore: token mancante")
-        }
-    }
-
-    fun login() = viewModelScope.launch {
-        val s = _state.value
-        _state.value = s.copy(loading = true, error = null, successMessage = null)
-        runCatching {
-            ApiClientBase.auth.login(LoginRequest(s.email, s.password))
-        }.onSuccess { auth ->
-            // Save credentials for biometric before handling success
-            sessionManager.saveCredentials(s.email, s.password)
-            // Ensure authProvider is set to LOCAL for standard login
-            val enrichedAuth = if (auth.authProvider == null) auth.copy(authProvider = "LOCAL") else auth
-            handleSuccessfulLogin(enrichedAuth)
-        }.onFailure { e ->
-            val errorMsg = e.getErrorMessage()
-            val finalMsg = if (errorMsg.contains("GOOGLE", ignoreCase = true) || errorMsg.contains("APPLE", ignoreCase = true)) {
-                "Questo account usa l'accesso tramite Google/Apple. Usa il relativo pulsante di login."
-            } else {
-                "Login fallito: $errorMsg"
-            }
-            _state.value = _state.value.copy(loading = false, error = finalMsg)
         }
     }
 
@@ -249,9 +217,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             runCatching {
                 ApiClientBase.auth.googleLogin(GoogleLoginRequest(idToken))
             }.onSuccess { auth ->
-                auth.email?.let { sessionManager.saveCredentials(it, "OAUTH_GOOGLE") }
-                // Ensure authProvider is set to GOOGLE if it's missing from response
-                val enrichedAuth = if (auth.authProvider == null) auth.copy(authProvider = "GOOGLE") else auth
+                val enrichedAuth = auth.copy(authProvider = "GOOGLE")
                 handleSuccessfulLogin(enrichedAuth, "Login Google completato!")
             }.onFailure { e ->
                 Log.e("AppViewModel", "Backend Google Login failed", e)
@@ -265,21 +231,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 else -> "Errore Google Sign-In: ${e.message}"
             }
             _state.value = _state.value.copy(loading = false, error = errorMsg)
-        }
-    }
-
-    fun register() = viewModelScope.launch {
-        val s = _state.value
-        _state.value = s.copy(loading = true, error = null, successMessage = null)
-        runCatching {
-            ApiClientBase.auth.register(RegisterRequest(s.username, s.email, s.password))
-        }.onSuccess { auth ->
-            sessionManager.saveCredentials(s.email, s.password)
-            // Ensure authProvider is set to LOCAL for registration
-            val enrichedAuth = if (auth.authProvider == null) auth.copy(authProvider = "LOCAL") else auth
-            handleSuccessfulLogin(enrichedAuth, "Registrazione completata!")
-        }.onFailure { e ->
-            _state.value = _state.value.copy(loading = false, error = "Registrazione fallita: ${e.getErrorMessage()}")
         }
     }
 
@@ -467,7 +418,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadLeagueMembersForParticipantPicker(leagueId: Long) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null)
-        runCatching { ApiClientBase.leagues.getLeagueMembersForCompetitionPicker(leagueId) }
+        runCatching { ApiClientBase.leagues.getLeagueMembers(leagueId) }
             .onSuccess { members ->
                 _state.value = _state.value.copy(leagueMembers = members, loading = false)
             }
@@ -801,6 +752,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
     }
 
+    fun deleteCompetition(league: LeagueResponse, season: SeasonResponse, competitionId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.competitions.deleteCompetition(competitionId) }
+            .onSuccess {
+                _state.value = _state.value.copy(
+                    successMessage = "Competizione eliminata",
+                    loading = false
+                )
+                // Torniamo alla lista competizioni e aggiorniamo
+                navigateTo(Screen.SeasonCompetitions(league, season))
+                selectSeason(league, season)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore eliminazione competizione: ${e.getErrorMessage()}")
+            }
+    }
+
     fun closeLeague(leagueId: Long) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.leagues.closeLeague(leagueId) }
@@ -1034,7 +1002,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         userId = me.id,
                         name = me.username ?: "Utente",
                         email = me.email,
-                        authProvider = me.authProvider
+                        authProvider = "GOOGLE"
                     ),
                     loading = false
                 )
@@ -1056,7 +1024,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         refreshToken = currentAuth?.refreshToken,
                         userId = me.id,
                         name = me.username ?: "Utente",
-                        email = me.email
+                        email = me.email,
+                        authProvider = "GOOGLE"
                     ),
                     loading = false,
                     successMessage = "Profilo aggiornato con successo!"
@@ -1067,37 +1036,28 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
     }
 
-    fun changePassword(old: String, new: String) = viewModelScope.launch {
-        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
-        runCatching { ApiClientBase.userSettings.changePassword(ChangePasswordRequest(old, new)) }
-            .onSuccess {
-                _state.value = _state.value.copy(
-                    loading = false,
-                    successMessage = "Password cambiata con successo!"
-                )
-                // Se la password è cambiata, aggiorniamo le credenziali per il biometrico
-                val currentEmail = _state.value.email
-                if (currentEmail.isNotBlank()) {
-                    sessionManager.saveCredentials(currentEmail, new)
-                }
-            }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore cambio password: ${e.getErrorMessage()}")
-            }
-    }
-
-    fun logout() {
+    fun logout() = viewModelScope.launch {
         val canBio = _state.value.canUseBiometrics
-        val bioEnabled = _state.value.isBiometricEnabled
-        // Non puliamo la sessione qui se vogliamo permettere il rientro biometrico immediato.
-        // Se l'utente vuole cambiare account, farà un nuovo login che sovrascriverà i token.
-        // viewModelScope.launch { sessionManager.clearSession() }
+        sessionManager.clearSession()
+        sessionManager.setBiometricEnabled(false)
         ApiClientBase.authToken = null
         _state.value = UiState(currentScreen = Screen.PublicLeagues).copy(
             canUseBiometrics = canBio,
-            isBiometricEnabled = bioEnabled
+            isBiometricEnabled = false
         )
         loadPublicLeagues()
+    }
+
+    fun deleteAccount() = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.userSettings.deleteAccount() }
+            .onSuccess {
+                _state.value = _state.value.copy(successMessage = "Account eliminato", loading = false)
+                logout() // Pulisce i dati locali e torna al login
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore eliminazione account: ${e.getErrorMessage()}")
+            }
     }
 
     fun showBiometricPrompt(activity: FragmentActivity) {
@@ -1105,19 +1065,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val biometricPrompt = BiometricPrompt(activity, executor, object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 super.onAuthenticationSucceeded(result)
-                viewModelScope.launch {
-                    val (email, password) = sessionManager.getCredentials()
-                    if (email != null && password != null) {
-                        if (password == "OAUTH_GOOGLE") {
-                            handleBiometricSuccess()
-                        } else {
-                            _state.value = _state.value.copy(email = email, password = password)
-                            login()
-                        }
-                    } else {
-                        handleBiometricSuccess()
-                    }
-                }
+                handleBiometricSuccess()
             }
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                 super.onAuthenticationError(errorCode, errString)
@@ -1140,7 +1088,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun handleBiometricSuccess() = viewModelScope.launch {
         val token = sessionManager.authToken.first()
-        val refreshToken = sessionManager.refreshToken.first()
         
         if (token != null) {
             ApiClientBase.authToken = token
@@ -1148,14 +1095,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             _state.value = _state.value.copy(currentScreen = Screen.MyLeagues, loading = false)
             loadMyLeagues()
         } else {
-            // Se non abbiamo un token, ma abbiamo credenziali salvate, proviamo il login silente
-            val (email, password) = sessionManager.getCredentials()
-            if (email != null && password != null && password != "OAUTH_GOOGLE") {
-                _state.value = _state.value.copy(email = email, password = password)
-                login()
-            } else {
-                _state.value = _state.value.copy(currentScreen = Screen.PublicLeagues, error = "Sessione scaduta")
-            }
+            _state.value = _state.value.copy(currentScreen = Screen.PublicLeagues, error = "Sessione Google scaduta")
         }
     }
 

@@ -23,11 +23,13 @@ import com.biliardino.viewmodel.UiState
 @Composable
 fun CompetitionMatchesScreen(league: LeagueResponse, season: SeasonResponse, competition: CompetitionResponse, s: UiState, vm: AppViewModel) {
     var showMatchForm by remember { mutableStateOf(false) }
+    val isTeamType = competition.matchType == "TEAM" || competition.rankingMode == "TEAM"
 
     Box(Modifier.fillMaxSize()) {
         if (showMatchForm) {
             MatchEntryView(
                 teams = s.seasonTeams,
+                isTeamType = isTeamType,
                 onConfirm = { request ->
                     vm.createMatch(competition.id, request)
                     showMatchForm = false
@@ -85,7 +87,7 @@ fun CompetitionMatchesScreen(league: LeagueResponse, season: SeasonResponse, com
 }
 
 @Composable
-fun MatchEntryView(teams: List<TeamResponse>, onConfirm: (CreateDoubleMatchRequest) -> Unit, onCancel: () -> Unit) {
+fun MatchEntryView(teams: List<TeamResponse>, isTeamType: Boolean = false, onConfirm: (CreateDoubleMatchRequest) -> Unit, onCancel: () -> Unit) {
     var teamA by remember { mutableStateOf<TeamResponse?>(null) }
     var teamB by remember { mutableStateOf<TeamResponse?>(null) }
     var scoreA by remember { mutableIntStateOf(0) }
@@ -122,8 +124,9 @@ fun MatchEntryView(teams: List<TeamResponse>, onConfirm: (CreateDoubleMatchReque
                     
                     TeamSelectionRow(
                         label = "Squadra A",
-                        teams = teams.filter { it.id != teamB?.id && !haveSharedPlayers(it, teamB) },
+                        teams = teams.filter { it.id != teamB?.id && (isTeamType || !haveSharedPlayers(it, teamB)) },
                         selectedTeam = teamA,
+                        isTeamType = isTeamType,
                         onTeamSelected = { teamA = it }
                     )
                     
@@ -131,8 +134,9 @@ fun MatchEntryView(teams: List<TeamResponse>, onConfirm: (CreateDoubleMatchReque
                     
                     TeamSelectionRow(
                         label = "Squadra B",
-                        teams = teams.filter { it.id != teamA?.id && !haveSharedPlayers(it, teamA) },
+                        teams = teams.filter { it.id != teamA?.id && (isTeamType || !haveSharedPlayers(it, teamA)) },
                         selectedTeam = teamB,
+                        isTeamType = isTeamType,
                         onTeamSelected = { teamB = it }
                     )
                 }
@@ -155,7 +159,7 @@ fun MatchEntryView(teams: List<TeamResponse>, onConfirm: (CreateDoubleMatchReque
             }
 
             Button(
-                enabled = teamA != null && teamB != null && teamA?.id != teamB?.id && !haveSharedPlayers(teamA, teamB),
+                enabled = teamA != null && teamB != null && teamA?.id != teamB?.id && (isTeamType || !haveSharedPlayers(teamA, teamB)),
                 onClick = {
                     onConfirm(
                         CreateDoubleMatchRequest(
@@ -191,24 +195,28 @@ private fun TeamSelectionRow(
     label: String,
     teams: List<TeamResponse>,
     selectedTeam: TeamResponse?,
+    isTeamType: Boolean = false,
     onTeamSelected: (TeamResponse) -> Unit
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-            selectedTeam?.let {
-                Text(
-                    "${it.playerAUsername} + ${it.playerBUsername}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+            if (!isTeamType) {
+                selectedTeam?.let {
+                    Text(
+                        "${it.playerAUsername ?: ""} + ${it.playerBUsername ?: ""}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
         SearchableTeamDropdown(
             teams = teams,
             selectedTeam = selectedTeam,
+            isTeamType = isTeamType,
             onTeamSelected = onTeamSelected
         )
     }
