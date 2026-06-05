@@ -15,6 +15,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.biliardino.model.*
+import com.biliardino.ui.Screen
 import com.biliardino.ui.components.MatchList
 import com.biliardino.ui.components.SearchableTeamDropdown
 import com.biliardino.viewmodel.AppViewModel
@@ -61,7 +62,11 @@ fun CompetitionMatchesScreen(league: LeagueResponse, season: SeasonResponse, com
                             isCompetitionActive = isCompetitionActive,
                             onDeleteMatch = { matchId -> vm.deleteMatch(competition.id, matchId) },
                             onUpdateResult = { matchId, sA, sB -> vm.updateMatchResult(competition.id, matchId, sA, sB) },
-                            onEditResult = { matchId, sA, sB -> vm.editMatchResult(competition.id, matchId, sA, sB) }
+                            onEditResult = { matchId, sA, sB -> vm.editMatchResult(competition.id, matchId, sA, sB) },
+                            onMatchClick = { match ->
+                                vm.loadMatchComments(match.id)
+                                vm.navigateTo(Screen.MatchDetail(match))
+                            }
                         )
                     }
                 }

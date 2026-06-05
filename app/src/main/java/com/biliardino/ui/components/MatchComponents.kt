@@ -41,6 +41,7 @@ fun MatchList(
     onDeleteMatch: ((Long) -> Unit)? = null,
     onUpdateResult: ((Long, Int, Int) -> Unit)? = null,
     onEditResult: ((Long, Int, Int) -> Unit)? = null,
+    onMatchClick: ((MatchResponse) -> Unit)? = null,
     isCompetitionActive: Boolean = true
 ) {
     val isLeague = competitionType == "LEAGUE"
@@ -118,6 +119,7 @@ fun MatchList(
                     onDeleteMatch = onDeleteMatch,
                     onUpdateResult = onUpdateResult,
                     onEditResult = onEditResult,
+                    onMatchClick = onMatchClick,
                     competitionType = competitionType,
                     isCompetitionActive = isCompetitionActive
                 )
@@ -135,6 +137,7 @@ fun MatchItem(
     onDeleteMatch: ((Long) -> Unit)? = null,
     onUpdateResult: ((Long, Int, Int) -> Unit)? = null,
     onEditResult: ((Long, Int, Int) -> Unit)? = null,
+    onMatchClick: ((MatchResponse) -> Unit)? = null,
     competitionType: String? = "LEAGUE",
     isCompetitionActive: Boolean = true
 ) {
@@ -154,7 +157,13 @@ fun MatchItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = canUpdate || canEdit) { showResultDialog = true },
+            .clickable {
+                if (onMatchClick != null) {
+                    onMatchClick(match)
+                } else if (canUpdate || canEdit) {
+                    showResultDialog = true
+                }
+            },
         shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(
             containerColor = if (isPlayed) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)

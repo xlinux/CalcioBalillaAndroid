@@ -1,14 +1,18 @@
 package com.biliardino.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -47,13 +51,17 @@ fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, 
         val isCup = competition.type == "CUP"
         
         val tabs = if (isCup) {
-            listOf("Tabellone", "Squadre")
+            listOf("Tabellone", "Chat", "Squadre")
         } else {
-            if (isTeamMatch) listOf("Classifica", "Squadre") else listOf("Classifica", "Giocatori", "Squadre")
+            if (isTeamMatch) listOf("Classifica", "Chat", "Squadre") else listOf("Classifica", "Giocatori", "Chat", "Squadre")
         }
 
-        val showPlayerRanking = competition.rankingMode != "TEAM" && !isTeamMatch && !isCup
-        val showTeamRanking = competition.rankingMode != "PLAYER" && !isCup
+        LaunchedEffect(selectedTab) {
+            val chatTabIndex = if (isCup) 1 else if (isTeamMatch) 1 else 2
+            if (selectedTab == chatTabIndex) {
+                vm.loadCompetitionComments(competition.id)
+            }
+        }
 
         TabRow(
             selectedTabIndex = selectedTab,
@@ -64,7 +72,7 @@ fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, 
                     selected = selectedTab == index,
                     onClick = { 
                         selectedTab = index
-                        if (index != 1 && index != 2) searchQuery = "" 
+                        searchQuery = "" 
                     },
                     text = { Text(title, fontWeight = if (selectedTab == index) FontWeight.Black else FontWeight.Normal) },
                     unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -72,7 +80,9 @@ fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, 
             }
         }
 
-        if ((!isCup && (selectedTab == 1 || selectedTab == 2)) || (isCup && selectedTab == 1)) {
+        val isSearchVisible = if (isCup) selectedTab == 2 else if (isTeamMatch) selectedTab == 2 else (selectedTab == 1 || selectedTab == 3)
+
+        if (isSearchVisible) {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
@@ -89,9 +99,13 @@ fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, 
                 when (selectedTab) {
                     0 -> TournamentBracketView(
                         matches = s.seasonMatches,
-                        onMatchClick = { showResultDialogByBracket = it }
+                        onMatchClick = { match ->
+                            vm.loadMatchComments(match.id)
+                            vm.navigateTo(Screen.MatchDetail(match))
+                        }
                     )
-                    1 -> {
+                    1 -> CompetitionChatTab(competition.id, s, vm)
+                    2 -> {
                         val filteredTeams = s.seasonTeams
                             .filter { it.name.contains(searchQuery, ignoreCase = true) }
                             .sortedBy { it.name }
@@ -99,54 +113,53 @@ fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, 
                     }
                 }
             } else {
-                val actualTab = if (isTeamMatch && selectedTab >= 1) selectedTab + 1 else selectedTab
-                when (actualTab) {
-                    0 -> Column {
-                        var rankingTab by remember { mutableIntStateOf(0) }
-                        if (showPlayerRanking && showTeamRanking) {
-                            SecondaryTabRow(
-                                selectedTabIndex = rankingTab,
-                                containerColor = MaterialTheme.colorScheme.surface
-                            ) {
-                                Tab(
-                                    selected = rankingTab == 0,
-                                    onClick = { rankingTab = 0 },
-                                    text = { Text("GIOCATORI", style = MaterialTheme.typography.labelLarge, fontWeight = if (rankingTab == 0) FontWeight.Black else FontWeight.Bold) }
-                                )
-                                Tab(
-                                    selected = rankingTab == 1,
-                                    onClick = { rankingTab = 1 },
-                                    text = { Text("SQUADRE", style = MaterialTheme.typography.labelLarge, fontWeight = if (rankingTab == 1) FontWeight.Black else FontWeight.Bold) }
-                                )
-                            }
-                        }
-                        when {
-                            showPlayerRanking && showTeamRanking && rankingTab == 0 -> PlayerRankingList(s.playerRankings, vm)
-                            showPlayerRanking && showTeamRanking -> TeamRankingList(s.teamRankings, competition, vm)
-                            showPlayerRanking -> PlayerRankingList(s.playerRankings, vm)
-                            else -> TeamRankingList(s.teamRankings, competition, vm)
+                if (isTeamMatch) {
+                    when (selectedTab) {
+                        0 -> Column { TeamRankingList(s.teamRankings, competition, vm) }
+                        1 -> CompetitionChatTab(competition.id, s, vm)
+                        2 -> {
+                            val filteredTeams = s.seasonTeams
+                                .filter { it.name.contains(searchQuery, ignoreCase = true) }
+                                .sortedByDescending { it.points ?: 0 }
+                            SeasonTeamsScreen(league, season, competition, s.copy(seasonTeams = filteredTeams), vm)
                         }
                     }
-                    1 -> {
-                        val filteredUsers = s.seasonUsers
-                            .filter { it.username.contains(searchQuery, ignoreCase = true) || (it.email?.contains(searchQuery, ignoreCase = true) == true) }
-                            .sortedByDescending { it.rating }
-                        
-                        UserList(filteredUsers) { user ->
-                            vm.navigateTo(Screen.PlayerDetail(league, season, competition, user))
-                            vm.loadPlayerDetailData(competition.id, user.userId)
-                        }
-                    }
-                    2 -> {
-                        val filteredTeams = s.seasonTeams
-                            .filter { 
-                                it.name.contains(searchQuery, ignoreCase = true) || 
-                                (it.playerAUsername?.contains(searchQuery, ignoreCase = true) == true) || 
-                                (it.playerBUsername?.contains(searchQuery, ignoreCase = true) == true)
-                            }
-                            .sortedByDescending { if (isTeamMatch) (it.points ?: 0) else (it.rating ?: 0) }
+                } else {
+                    when (selectedTab) {
+                        0 -> Column {
+                            var rankingTab by remember { mutableIntStateOf(0) }
+                            val showPlayerRanking = competition.rankingMode != "TEAM"
+                            val showTeamRanking = competition.rankingMode != "PLAYER"
                             
-                        SeasonTeamsScreen(league, season, competition, s.copy(seasonTeams = filteredTeams), vm)
+                            if (showPlayerRanking && showTeamRanking) {
+                                SecondaryTabRow(selectedTabIndex = rankingTab, containerColor = MaterialTheme.colorScheme.surface) {
+                                    Tab(selected = rankingTab == 0, onClick = { rankingTab = 0 }, text = { Text("GIOCATORI", style = MaterialTheme.typography.labelLarge, fontWeight = if (rankingTab == 0) FontWeight.Black else FontWeight.Bold) })
+                                    Tab(selected = rankingTab == 1, onClick = { rankingTab = 1 }, text = { Text("SQUADRE", style = MaterialTheme.typography.labelLarge, fontWeight = if (rankingTab == 1) FontWeight.Black else FontWeight.Bold) })
+                                }
+                            }
+                            when {
+                                showPlayerRanking && showTeamRanking && rankingTab == 0 -> PlayerRankingList(s.playerRankings, vm)
+                                showPlayerRanking && showTeamRanking -> TeamRankingList(s.teamRankings, competition, vm)
+                                showPlayerRanking -> PlayerRankingList(s.playerRankings, vm)
+                                else -> TeamRankingList(s.teamRankings, competition, vm)
+                            }
+                        }
+                        1 -> {
+                            val filteredUsers = s.seasonUsers
+                                .filter { it.username.contains(searchQuery, ignoreCase = true) || (it.email?.contains(searchQuery, ignoreCase = true) == true) }
+                                .sortedByDescending { it.rating }
+                            UserList(filteredUsers) { user ->
+                                vm.loadPlayerProfile(user.userId)
+                                vm.navigateTo(Screen.PlayerProfile(user.userId, user.username))
+                            }
+                        }
+                        2 -> CompetitionChatTab(competition.id, s, vm)
+                        3 -> {
+                            val filteredTeams = s.seasonTeams
+                                .filter { it.name.contains(searchQuery, ignoreCase = true) || (it.playerAUsername?.contains(searchQuery, ignoreCase = true) == true) || (it.playerBUsername?.contains(searchQuery, ignoreCase = true) == true) }
+                                .sortedByDescending { it.rating ?: 0 }
+                            SeasonTeamsScreen(league, season, competition, s.copy(seasonTeams = filteredTeams), vm)
+                        }
                     }
                 }
             }
@@ -185,33 +198,15 @@ fun PlayerRankingList(rankings: List<PlayerRankingResponse>, vm: AppViewModel) {
         }
     }
 
-    RankingListScaffold(
-        emptyText = "La classifica verrà popolata dopo le prime partite registrate.", 
-        isEmpty = rankings.isEmpty(),
-        isTeamMatch = false,
-        scrollState = horizontalScrollState
-    ) {
-        item {
-            RankingSortControls(
-                sortField = sortField,
-                descending = descending,
-                onSortFieldChange = { sortField = it },
-                onToggleDirection = { descending = !descending }
-            )
-        }
-        itemsIndexed(sortedRankings, key = { _, player -> player.userId }) { index, player ->
+    RankingListScaffold(emptyText = "La classifica verrà popolata dopo le prime partite.", isEmpty = rankings.isEmpty(), isTeamMatch = false, scrollState = horizontalScrollState) {
+        item { RankingSortControls(sortField = sortField, descending = descending, onSortFieldChange = { sortField = it }, onToggleDirection = { descending = !descending }) }
+        itemsIndexed(sortedRankings, key = { _, p -> p.userId }) { index, player ->
             RankingRow(
                 position = index + 1,
                 title = player.username ?: "Utente",
                 subtitle = null,
                 mainValue = player.rating.toString(),
-                stats = listOf(
-                    "PG" to player.matchesPlayed.toString(),
-                    "GF" to player.goalsFor.toString(),
-                    "GS" to player.goalsAgainst.toString(),
-                    "CF" to player.cappottiGiven.toString(),
-                    "CS" to player.cappottiReceived.toString()
-                ),
+                stats = listOf("PG" to player.matchesPlayed.toString(), "GF" to player.goalsFor.toString(), "GS" to player.goalsAgainst.toString(), "CF" to player.cappottiGiven.toString(), "CS" to player.cappottiReceived.toString()),
                 scrollState = horizontalScrollState,
                 onRowClick = {
                     vm.loadPlayerProfile(player.userId)
@@ -247,21 +242,8 @@ fun TeamRankingList(rankings: List<TeamRankingResponse>, competition: Competitio
         }
     }
 
-    RankingListScaffold(
-        emptyText = "La classifica squadre verrà popolata dopo le prime partite registrate.", 
-        isEmpty = rankings.isEmpty(),
-        isTeamMatch = isTeamType,
-        scrollState = horizontalScrollState
-    ) {
-        item {
-            RankingSortControls(
-                sortField = sortField,
-                descending = descending,
-                onSortFieldChange = { sortField = it },
-                onToggleDirection = { descending = !descending },
-                matchType = competition.matchType
-            )
-        }
+    RankingListScaffold(emptyText = "La classifica squadre verrà popolata dopo le prime partite.", isEmpty = rankings.isEmpty(), isTeamMatch = isTeamType, scrollState = horizontalScrollState) {
+        item { RankingSortControls(sortField = sortField, descending = descending, onSortFieldChange = { sortField = it }, onToggleDirection = { descending = !descending }, matchType = competition.matchType) }
         itemsIndexed(sortedRankings, key = { _, team -> team.teamId }) { index, team ->
             val isTeam = team.playerAId == null
             val isDouble = team.playerAId != null && team.playerBId != null
@@ -272,23 +254,9 @@ fun TeamRankingList(rankings: List<TeamRankingResponse>, competition: Competitio
 
             val mainValue = if (isTeamType) team.points.toString() else team.rating.toString()
             val stats = if (isTeamType) {
-                listOf(
-                    "PG" to team.matchesPlayed.toString(),
-                    "V" to team.wins.toString(),
-                    "N" to team.draws.toString(),
-                    "P" to team.losses.toString(),
-                    "GF" to team.goalsFor.toString(),
-                    "GS" to team.goalsAgainst.toString(),
-                    "DR" to team.goalDifference.toString()
-                )
+                listOf("PG" to team.matchesPlayed.toString(), "V" to team.wins.toString(), "N" to team.draws.toString(), "P" to team.losses.toString(), "GF" to team.goalsFor.toString(), "GS" to team.goalsAgainst.toString(), "DR" to team.goalDifference.toString())
             } else {
-                listOf(
-                    "PG" to team.matchesPlayed.toString(),
-                    "GF" to team.goalsFor.toString(),
-                    "GS" to team.goalsAgainst.toString(),
-                    "CF" to (team.cappottiGiven?.toString() ?: "0"),
-                    "CS" to (team.cappottiReceived?.toString() ?: "0")
-                )
+                listOf("PG" to team.matchesPlayed.toString(), "GF" to team.goalsFor.toString(), "GS" to team.goalsAgainst.toString(), "CF" to (team.cappottiGiven?.toString() ?: "0"), "CS" to (team.cappottiReceived?.toString() ?: "0"))
             }
 
             RankingRow(
@@ -298,237 +266,152 @@ fun TeamRankingList(rankings: List<TeamRankingResponse>, competition: Competitio
                 mainValue = mainValue,
                 stats = stats,
                 scrollState = horizontalScrollState,
-                onTitleClick = if (!isTeam) {
-                    {
-                        team.playerAId?.let {
-                            vm.loadPlayerProfile(it)
-                            vm.navigateTo(Screen.PlayerProfile(it, team.playerAUsername ?: "Giocatore"))
-                        }
-                    }
-                } else null,
-                onSubtitleClick = if (isDouble) {
-                    {
-                        team.playerBId?.let {
-                            vm.loadPlayerProfile(it)
-                            vm.navigateTo(Screen.PlayerProfile(it, team.playerBUsername ?: "Giocatore"))
-                        }
-                    }
-                } else null,
-                onRowClick = if (isTeam) {
-                    {
-                        vm.loadTeamProfile(team.teamId)
-                        vm.navigateTo(Screen.TeamProfile(team.teamId, team.teamName))
-                    }
-                } else null
+                onTitleClick = if (!isTeam) { { team.playerAId?.let { vm.loadPlayerProfile(it); vm.navigateTo(Screen.PlayerProfile(it, team.playerAUsername ?: "Giocatore")) } } } else null,
+                onSubtitleClick = if (isDouble) { { team.playerBId?.let { vm.loadPlayerProfile(it); vm.navigateTo(Screen.PlayerProfile(it, team.playerBUsername ?: "Giocatore")) } } } else null,
+                onRowClick = if (isTeam) { { vm.loadTeamProfile(team.teamId); vm.navigateTo(Screen.TeamProfile(team.teamId, team.teamName)) } } else null
             )
         }
     }
 }
 
 @Composable
-private fun RankingListScaffold(
-    emptyText: String,
-    isEmpty: Boolean,
-    isTeamMatch: Boolean,
-    scrollState: androidx.compose.foundation.ScrollState,
-    content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit
-) {
+private fun RankingListScaffold(emptyText: String, isEmpty: Boolean, isTeamMatch: Boolean, scrollState: androidx.compose.foundation.ScrollState, content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
     if (isEmpty) {
-        Box(
-            Modifier.fillMaxSize().padding(16.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-                shape = MaterialTheme.shapes.extraLarge
-            ) {
-                Text(
-                    "Nessun dato ancora disponibile per questa classifica. $emptyText",
-                    modifier = Modifier.padding(32.dp).fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)), shape = MaterialTheme.shapes.extraLarge) {
+                Text("Nessun dato ancora disponibile per questa classifica. $emptyText", modifier = Modifier.padding(32.dp).fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     } else {
         Column(Modifier.fillMaxSize()) {
             RankingHeader(isTeamMatch, scrollState)
-            LazyColumn(
-                Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 12.dp),
-                content = content
-            )
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 12.dp), content = content)
         }
     }
 }
 
 @Composable
 private fun RankingHeader(isTeamMatch: Boolean, scrollState: androidx.compose.foundation.ScrollState) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Parte Fissa Sinistra
+    Surface(color = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Row(modifier = Modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("POS", modifier = Modifier.width(32.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("NOME", modifier = Modifier.width(150.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            
-            // Parte Scorrevole Centrale
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .horizontalScroll(scrollState)
-                    .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                val headers = if (isTeamMatch) {
-                    listOf("PG", "V", "N", "P", "GF", "GS", "DR")
-                } else {
-                    listOf("PG", "GF", "GS", "CF", "CS")
-                }
+            Row(modifier = Modifier.weight(1f).horizontalScroll(scrollState).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                val headers = if (isTeamMatch) listOf("PG", "V", "N", "P", "GF", "GS", "DR") else listOf("PG", "GF", "GS", "CF", "CS")
                 headers.forEach { header ->
-                    Text(
-                        text = header,
-                        modifier = Modifier.width(24.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
+                    Text(text = header, modifier = Modifier.width(24.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                 }
             }
-
-            // Parte Fissa Destra
-            Text(
-                text = if (isTeamMatch) "PTS" else "RAT",
-                modifier = Modifier.width(55.dp).padding(end = 12.dp),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.End
-            )
+            Text(text = if (isTeamMatch) "PTS" else "RAT", modifier = Modifier.width(55.dp).padding(end = 12.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.End)
         }
     }
 }
 
 @Composable
-private fun RankingRow(
-    position: Int,
-    title: String,
-    subtitle: String?,
-    mainValue: String,
-    stats: List<Pair<String, String>>,
-    scrollState: androidx.compose.foundation.ScrollState,
-    onTitleClick: (() -> Unit)? = null,
-    onSubtitleClick: (() -> Unit)? = null,
-    onRowClick: (() -> Unit)? = null
-) {
+private fun RankingRow(position: Int, title: String, subtitle: String?, mainValue: String, stats: List<Pair<String, String>>, scrollState: androidx.compose.foundation.ScrollState, onTitleClick: (() -> Unit)? = null, onSubtitleClick: (() -> Unit)? = null, onRowClick: (() -> Unit)? = null) {
     val accent = rankAccent(position)
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onRowClick != null) Modifier.clickable(onClick = onRowClick) else Modifier)
-    ) {
+    Surface(modifier = Modifier.fillMaxWidth().then(if (onRowClick != null) Modifier.clickable(onClick = onRowClick) else Modifier)) {
         Column {
-            Row(
-                modifier = Modifier.padding(vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Parte Fissa Sinistra
+            Row(modifier = Modifier.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(modifier = Modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = position.toString(),
-                        modifier = Modifier.width(32.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Black,
-                        color = if (position <= 3) accent else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
+                    Text(text = position.toString(), modifier = Modifier.width(32.dp), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Black, color = if (position <= 3) accent else MaterialTheme.colorScheme.onSurfaceVariant)
                     Column(Modifier.width(150.dp)) {
-                        Text(
-                            title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = if (position <= 3) FontWeight.ExtraBold else FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = if (onTitleClick != null) Modifier.clickable(onClick = onTitleClick) else Modifier,
-                            color = if (onTitleClick != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                        )
+                        Text(text = title, style = MaterialTheme.typography.bodyMedium, fontWeight = if (position <= 3) FontWeight.ExtraBold else FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = if (onTitleClick != null) Modifier.clickable(onClick = onTitleClick) else Modifier, color = if (onTitleClick != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
                         if (!subtitle.isNullOrBlank()) {
-                            Text(
-                                subtitle,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (onSubtitleClick != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = if (onSubtitleClick != null) Modifier.clickable(onClick = onSubtitleClick) else Modifier
-                            )
+                            Text(text = subtitle, style = MaterialTheme.typography.labelSmall, color = if (onSubtitleClick != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = if (onSubtitleClick != null) Modifier.clickable(onClick = onSubtitleClick) else Modifier)
                         }
                     }
                 }
-
-                // Parte Scorrevole Centrale
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .horizontalScroll(scrollState)
-                        .padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
+                Row(modifier = Modifier.weight(1f).horizontalScroll(scrollState).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     stats.forEach { (_, value) ->
-                        Text(
-                            text = value,
-                            modifier = Modifier.width(24.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            textAlign = TextAlign.Center
-                        )
+                        Text(text = value, modifier = Modifier.width(24.dp), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
                     }
                 }
-
-                // Parte Fissa Destra
-                Text(
-                    text = mainValue,
-                    modifier = Modifier.width(55.dp).padding(end = 12.dp),
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Black,
-                    textAlign = TextAlign.End,
-                    color = if (position <= 3) accent else MaterialTheme.colorScheme.primary
-                )
+                Text(text = mainValue, modifier = Modifier.width(55.dp).padding(end = 12.dp), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Black, textAlign = TextAlign.End, color = if (position <= 3) accent else MaterialTheme.colorScheme.primary)
             }
             HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         }
     }
 }
 
-private enum class RankingSortField(val label: String) {
-    Rating("Rating"),
-    Points("Punti"),
-    GoalsFor("G. Fatti"),
-    GoalsAgainst("G. Subiti"),
-    GoalDifference("Diff. Reti"),
-    Played("Partite"),
-    Wins("Vinte"),
-    Draws("Pareggiate"),
-    Losses("Perse"),
-    CappottiGiven("C. Fatti"),
-    CappottiReceived("C. Subiti")
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CompetitionChatTab(competitionId: Long, s: UiState, vm: AppViewModel) {
+    var messageText by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(s.competitionComments.size) {
+        if (s.competitionComments.isNotEmpty()) {
+            listState.animateScrollToItem(s.competitionComments.size - 1)
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+            isRefreshing = s.loading,
+            onRefresh = { vm.loadCompetitionComments(competitionId) },
+            modifier = Modifier.weight(1f)
+        ) {
+            if (s.competitionComments.isEmpty() && !s.loading) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Nessun messaggio in questa competizione. Inizia tu!", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                val sortedComments = remember(s.competitionComments) {
+                    s.competitionComments.sortedBy { it.createdAt }
+                }
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    itemsIndexed(sortedComments, key = { _, c -> c.id }) { _, comment ->
+                        val isMe = comment.userId == s.currentUser?.userId
+                        com.biliardino.ui.screens.CommentBubble(comment.username, comment.message, comment.createdAt, isMe)
+                    }
+                }
+            }
+        }
+
+        Surface(tonalElevation = 4.dp, modifier = Modifier.fillMaxWidth()) {
+            Row(modifier = Modifier.padding(12.dp).imePadding(), verticalAlignment = Alignment.Bottom) {
+                OutlinedTextField(
+                    value = messageText,
+                    onValueChange = { if (it.length <= 1000) messageText = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Scrivi un messaggio...") },
+                    maxLines = 4,
+                    shape = RoundedCornerShape(24.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                FloatingActionButton(
+                    onClick = {
+                        if (messageText.isNotBlank()) {
+                            vm.addCompetitionComment(competitionId, messageText)
+                            messageText = ""
+                        }
+                    },
+                    modifier = Modifier.size(48.dp),
+                    shape = CircleShape,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Send, "Invia", modifier = Modifier.size(20.dp))
+                }
+            }
+        }
+    }
 }
 
-private fun <T> List<T>.sortedByField(
-    field: RankingSortField,
-    descending: Boolean,
-    selector: (T, RankingSortField) -> Int
-): List<T> {
+private enum class RankingSortField(val label: String) {
+    Rating("Rating"), Points("Punti"), GoalsFor("G. Fatti"), GoalsAgainst("G. Subiti"), GoalDifference("Diff. Reti"),
+    Played("Partite"), Wins("Vinte"), Draws("Pareggiate"), Losses("Perse"), CappottiGiven("C. Fatti"), CappottiReceived("C. Subiti")
+}
+
+private fun <T> List<T>.sortedByField(field: RankingSortField, descending: Boolean, selector: (T, RankingSortField) -> Int): List<T> {
     val nameSelector: (T) -> String = { item ->
         when (item) {
             is PlayerRankingResponse -> item.username ?: ""
@@ -536,56 +419,26 @@ private fun <T> List<T>.sortedByField(
             else -> ""
         }
     }
-    val comparator = if (descending) {
-        compareByDescending<T> { selector(it, field) }.thenBy(nameSelector)
-    } else {
-        compareBy<T> { selector(it, field) }.thenBy(nameSelector)
-    }
+    val comparator = if (descending) compareByDescending<T> { selector(it, field) }.thenBy(nameSelector)
+    else compareBy<T> { selector(it, field) }.thenBy(nameSelector)
     return sortedWith(comparator)
 }
 
 @Composable
-private fun RankingSortControls(
-    sortField: RankingSortField,
-    descending: Boolean,
-    onSortFieldChange: (RankingSortField) -> Unit,
-    onToggleDirection: () -> Unit,
-    matchType: String? = null
-) {
+private fun RankingSortControls(sortField: RankingSortField, descending: Boolean, onSortFieldChange: (RankingSortField) -> Unit, onToggleDirection: () -> Unit, matchType: String? = null) {
     val isTeamType = matchType == "TEAM"
-    val visibleFields = if (isTeamType) {
-        listOf(RankingSortField.Points, RankingSortField.GoalDifference, RankingSortField.Played, RankingSortField.Wins)
-    } else {
-        listOf(RankingSortField.Rating, RankingSortField.Played, RankingSortField.GoalsFor)
-    }
+    val visibleFields = if (isTeamType) listOf(RankingSortField.Points, RankingSortField.GoalDifference, RankingSortField.Played, RankingSortField.Wins)
+    else listOf(RankingSortField.Rating, RankingSortField.Played, RankingSortField.GoalsFor)
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)
-    ) {
+    Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)) {
         Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.AutoMirrored.Filled.Sort, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                 visibleFields.forEach { field ->
-                    FilterChip(
-                        selected = sortField == field,
-                        onClick = { onSortFieldChange(field) },
-                        label = { Text(field.label, fontSize = 11.sp) },
-                        shape = MaterialTheme.shapes.small
-                    )
+                    FilterChip(selected = sortField == field, onClick = { onSortFieldChange(field) }, label = { Text(field.label, fontSize = 11.sp) }, shape = MaterialTheme.shapes.small)
                 }
-                
                 IconButton(onClick = onToggleDirection, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        if (descending) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    Icon(if (descending) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                 }
             }
         }
@@ -594,9 +447,9 @@ private fun RankingSortControls(
 
 @Composable
 fun rankAccent(rank: Int): Color = when (rank) {
-    1 -> Color(0xFFFFD700) // Gold
-    2 -> Color(0xFFC0C0C0) // Silver
-    3 -> Color(0xFFCD7F32) // Bronze
+    1 -> Color(0xFFFFD700)
+    2 -> Color(0xFFC0C0C0)
+    3 -> Color(0xFFCD7F32)
     else -> MaterialTheme.colorScheme.primary
 }
 
@@ -604,27 +457,12 @@ fun rankAccent(rank: Int): Color = when (rank) {
 fun UserList(users: List<LeagueUserResponse>, onUserClick: (LeagueUserResponse) -> Unit) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         itemsIndexed(users) { _, user ->
-            Card(
-                modifier = Modifier.fillMaxWidth().clickable { onUserClick(user) },
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                ListItem(
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    headlineContent = { Text(user.username, fontWeight = FontWeight.Black) },
-                    supportingContent = { Text(user.email ?: "Nessuna email") },
-                    trailingContent = { 
-                        Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.small) {
-                            Text(
-                                "Rat: ${user.rating}", 
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+            Card(modifier = Modifier.fillMaxWidth().clickable { onUserClick(user) }, shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
+                ListItem(colors = ListItemDefaults.colors(containerColor = Color.Transparent), headlineContent = { Text(user.username, fontWeight = FontWeight.Black) }, supportingContent = { Text(user.email ?: "Nessuna email") }, trailingContent = {
+                    Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.small) {
+                        Text("Rat: ${user.rating}", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     }
-                )
+                })
             }
         }
     }

@@ -111,6 +111,16 @@ fun ContentScreen(vm: AppViewModel) {
                                         vm.navigateTo(Screen.MyLeagues)
                                     }
                                 }
+                                is Screen.MatchDetail -> {
+                                    val league = s.currentLeague
+                                    val season = s.currentSeason
+                                    val competition = s.currentCompetition
+                                    if (league != null && season != null && competition != null) {
+                                        vm.navigateTo(Screen.CompetitionMatches(league, season, competition))
+                                    } else {
+                                        vm.navigateTo(Screen.MyLeagues)
+                                    }
+                                }
                                 is Screen.JoinTeam -> vm.navigateTo(Screen.SeasonCompetitions(screen.league, screen.season))
                                 else -> {}
                             }
@@ -236,6 +246,7 @@ fun ContentScreen(vm: AppViewModel) {
                     is Screen.PlayerDetail -> PlayerDetailScreen(screen.league, screen.season, screen.competition, screen.user, s, vm)
                     is Screen.PlayerProfile -> PlayerProfileScreen(screen.userId, screen.name, s, vm)
                     is Screen.TeamProfile -> TeamProfileScreen(screen.teamId, screen.name, s, vm)
+                    is Screen.MatchDetail -> MatchDetailScreen(screen.match, s, vm)
                     is Screen.JoinTeam -> JoinTeamScreen(screen.league, screen.season, screen.competition, s, vm)
                 }
             }
@@ -280,5 +291,6 @@ private fun getScreenTitle(screen: Screen): String = when (screen) {
     is Screen.PlayerDetail -> screen.user.username
     is Screen.PlayerProfile -> "Profilo: ${screen.name}"
     is Screen.TeamProfile -> "Profilo: ${screen.name}"
+    is Screen.MatchDetail -> "Dettaglio Partita"
     is Screen.JoinTeam -> "Partecipa alla Squadra"
 }

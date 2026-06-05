@@ -63,6 +63,8 @@ data class UiState(
     val currentUserRoleInLeague: String? = null,
     val currentPlayerProfile: PlayerProfileResponse? = null,
     val currentTeamProfile: TeamProfileResponse? = null,
+    val matchComments: List<MatchCommentResponse> = emptyList(),
+    val competitionComments: List<CompetitionCommentResponse> = emptyList(),
     
     // Create League fields
     val newLeagueName: String = "",
@@ -520,6 +522,54 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             .onFailure { e ->
                 _state.value = _state.value.copy(loading = false, error = "Errore profilo squadra: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun loadMatchComments(matchId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching { ApiClientBase.matches.getMatchComments(matchId) }
+            .onSuccess { comments ->
+                _state.value = _state.value.copy(matchComments = comments, loading = false)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore commenti: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun addMatchComment(matchId: Long, message: String) = viewModelScope.launch {
+        if (message.isBlank()) return@launch
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching { ApiClientBase.matches.addMatchComment(matchId, CreateMatchCommentRequest(message)) }
+            .onSuccess {
+                _state.value = _state.value.copy(loading = false)
+                loadMatchComments(matchId)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore invio messaggio: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun loadCompetitionComments(competitionId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching { ApiClientBase.competitions.getCompetitionComments(competitionId) }
+            .onSuccess { comments ->
+                _state.value = _state.value.copy(competitionComments = comments, loading = false)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore commenti competizione: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun addCompetitionComment(competitionId: Long, message: String) = viewModelScope.launch {
+        if (message.isBlank()) return@launch
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching { ApiClientBase.competitions.addCompetitionComment(competitionId, CreateCompetitionCommentRequest(message)) }
+            .onSuccess {
+                _state.value = _state.value.copy(loading = false)
+                loadCompetitionComments(competitionId)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore invio messaggio competizione: ${e.getErrorMessage()}")
             }
     }
 

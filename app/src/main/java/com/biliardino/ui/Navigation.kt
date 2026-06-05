@@ -3,6 +3,7 @@ package com.biliardino.ui
 import com.biliardino.model.CompetitionResponse
 import com.biliardino.model.LeagueResponse
 import com.biliardino.model.LeagueUserResponse
+import com.biliardino.model.MatchResponse
 import com.biliardino.model.SeasonResponse
 import com.biliardino.model.TeamResponse
 
@@ -25,5 +26,6 @@ sealed class Screen {
     data class PlayerDetail(val league: LeagueResponse, val season: SeasonResponse, val competition: CompetitionResponse, val user: LeagueUserResponse) : Screen()
     data class PlayerProfile(val userId: Long, val name: String) : Screen()
     data class TeamProfile(val teamId: Long, val name: String) : Screen()
+    data class MatchDetail(val match: MatchResponse) : Screen()
     data class JoinTeam(val league: LeagueResponse, val season: SeasonResponse, val competition: CompetitionResponse) : Screen()
 }

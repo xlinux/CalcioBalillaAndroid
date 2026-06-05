@@ -311,6 +311,36 @@ data class GenerateRandomMatchesRequest( // Renamed from RandomMatchesRequest
     val matchesCount: Int
 )
 
+@Serializable
+data class MatchCommentResponse(
+    val id: Long,
+    val matchId: Long,
+    val userId: Long,
+    val username: String,
+    val message: String,
+    val createdAt: String
+)
+
+@Serializable
+data class CompetitionCommentResponse(
+    val id: Long,
+    val competitionId: Long,
+    val userId: Long,
+    val username: String,
+    val message: String,
+    val createdAt: String
+)
+
+@Serializable
+data class CreateMatchCommentRequest(
+    val message: String
+)
+
+@Serializable
+data class CreateCompetitionCommentRequest(
+    val message: String
+)
+
 // --- Classifiche & Statistiche ---
 
 @Serializable

@@ -186,6 +186,12 @@ interface CompetitionApi {
 
     @GET("competitions/{competitionId}/players/rating-history")
     suspend fun getAllPlayersRatingHistory(@Path("competitionId") competitionId: Long): List<RatingHistoryResponse>
+
+    @GET("competitions/{competitionId}/comments")
+    suspend fun getCompetitionComments(@Path("competitionId") competitionId: Long): List<CompetitionCommentResponse>
+
+    @POST("competitions/{competitionId}/comments")
+    suspend fun addCompetitionComment(@Path("competitionId") competitionId: Long, @Body request: CreateCompetitionCommentRequest): CompetitionCommentResponse
 }
 
 interface MatchApi {
@@ -197,6 +203,12 @@ interface MatchApi {
 
     @PUT("competitions/matches/{matchId}/result/edit")
     suspend fun editMatchResult(@Path("matchId") matchId: Long, @Body request: UpdateMatchResultRequest): MatchResponse
+
+    @GET("matches/{matchId}/comments")
+    suspend fun getMatchComments(@Path("matchId") matchId: Long): List<MatchCommentResponse>
+
+    @POST("matches/{matchId}/comments")
+    suspend fun addMatchComment(@Path("matchId") matchId: Long, @Body request: CreateMatchCommentRequest): MatchCommentResponse
 }
 
 interface ProfileApi {
