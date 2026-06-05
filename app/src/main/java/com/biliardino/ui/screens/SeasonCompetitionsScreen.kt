@@ -1,6 +1,7 @@
 package com.biliardino.ui.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.biliardino.model.CompetitionResponse
 import com.biliardino.model.LeagueResponse
 import com.biliardino.model.SeasonResponse
@@ -51,7 +53,7 @@ fun SeasonCompetitionsScreen(
                 if (selectedTab == 0) {
                     CompetitionsTab(league, season, s, vm) { competitionToJoin = it }
                 } else {
-                    TrophiesTab(s)
+                    TrophiesTab(league, season, s, vm)
                 }
             }
         }
@@ -116,6 +118,7 @@ fun SeasonCompetitionsScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CompetitionsTab(
     league: LeagueResponse,
@@ -158,6 +161,10 @@ fun CompetitionsTab(
             }
         }
     } else {
+        val groupedCompetitions = remember(s.competitions) {
+            s.competitions.groupBy { it.sportName ?: "Altro" }
+        }
+
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
@@ -169,24 +176,47 @@ fun CompetitionsTab(
                     count = s.competitions.size
                 )
             }
-            items(s.competitions) { competition ->
-                CompetitionCard(
-                    competition = competition,
-                    onClick = {
-                        if (competition.currentUserJoined) {
-                            vm.selectCompetition(league, season, competition)
-                        } else {
-                            onJoin(competition)
-                        }
+
+            groupedCompetitions.forEach { (sport, competitions) ->
+                stickyHeader {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                    ) {
+                        Text(
+                            text = sport.uppercase(),
+                            modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.primary,
+                            letterSpacing = 1.sp
+                        )
                     }
-                )
+                }
+                items(competitions) { competition ->
+                    CompetitionCard(
+                        competition = competition,
+                        onClick = {
+                            if (competition.currentUserJoined) {
+                                vm.selectCompetition(league, season, competition)
+                            } else {
+                                onJoin(competition)
+                            }
+                        }
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun TrophiesTab(s: UiState) {
+fun TrophiesTab(
+    league: LeagueResponse,
+    season: SeasonResponse,
+    s: UiState,
+    vm: AppViewModel
+) {
     if (s.trophies.isEmpty() && !s.loading) {
         Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
             Text(
@@ -211,16 +241,22 @@ fun TrophiesTab(s: UiState) {
                 )
             }
             items(s.trophies) { trophy ->
-                TrophyCard(trophy)
+                TrophyCard(trophy) {
+                    val comp = s.competitions.find { it.id == trophy.competitionId }
+                    if (comp != null) {
+                        vm.selectCompetition(league, season, comp)
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-fun TrophyCard(trophy: com.biliardino.model.TrophyResponse) {
+fun TrophyCard(trophy: com.biliardino.model.TrophyResponse, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -256,11 +292,7 @@ fun CompetitionCard(competition: CompetitionResponse, onClick: () -> Unit) {
     val isLeague = competition.type == "LEAGUE"
     val isActive = competition.active ?: (competition.status == "ACTIVE" || competition.status == null)
     val typeLabel = if (isLeague) "Campionato" else "Torneo"
-    val rankingLabel = when (competition.rankingMode) {
-        "PLAYER" -> "Giocatori"
-        "TEAM" -> "Squadre"
-        else -> "Entrambe"
-    }
+    val sportLabel = competition.sportName ?: "Sport"
     val accentColor = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
     val actionColor = if (competition.currentUserJoined) accentColor else Color(0xFFF57C00)
 
@@ -311,8 +343,8 @@ fun CompetitionCard(competition: CompetitionResponse, onClick: () -> Unit) {
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        CompetitionInfoChip(sportLabel, MaterialTheme.colorScheme.secondary)
                         CompetitionInfoChip(typeLabel, accentColor)
-                        CompetitionInfoChip(rankingLabel, MaterialTheme.colorScheme.tertiary)
                         RegistrationStatusChip(competition.registrationOpen)
                     }
                 }

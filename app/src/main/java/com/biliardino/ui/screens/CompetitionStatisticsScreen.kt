@@ -1,13 +1,15 @@
 package com.biliardino.ui.screens
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Search
@@ -15,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -27,6 +30,7 @@ import com.biliardino.ui.components.TournamentBracketView
 import com.biliardino.viewmodel.AppViewModel
 import com.biliardino.viewmodel.UiState
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, competition: CompetitionResponse, s: UiState, vm: AppViewModel) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -62,7 +66,7 @@ fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, 
                         selectedTab = index
                         if (index != 1 && index != 2) searchQuery = "" 
                     },
-                    text = { Text(title, fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal) },
+                    text = { Text(title, fontWeight = if (selectedTab == index) FontWeight.Black else FontWeight.Normal) },
                     unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -100,18 +104,19 @@ fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, 
                     0 -> Column {
                         var rankingTab by remember { mutableIntStateOf(0) }
                         if (showPlayerRanking && showTeamRanking) {
-                            TabRow(selectedTabIndex = rankingTab, containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)) {
+                            SecondaryTabRow(
+                                selectedTabIndex = rankingTab,
+                                containerColor = MaterialTheme.colorScheme.surface
+                            ) {
                                 Tab(
                                     selected = rankingTab == 0,
                                     onClick = { rankingTab = 0 },
-                                    text = { Text("Giocatori", fontSize = 12.sp, fontWeight = if (rankingTab == 0) FontWeight.Bold else FontWeight.Normal) },
-                                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = { Text("GIOCATORI", style = MaterialTheme.typography.labelLarge, fontWeight = if (rankingTab == 0) FontWeight.Black else FontWeight.Bold) }
                                 )
                                 Tab(
                                     selected = rankingTab == 1,
                                     onClick = { rankingTab = 1 },
-                                    text = { Text("Squadre", fontSize = 12.sp, fontWeight = if (rankingTab == 1) FontWeight.Bold else FontWeight.Normal) },
-                                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = { Text("SQUADRE", style = MaterialTheme.typography.labelLarge, fontWeight = if (rankingTab == 1) FontWeight.Black else FontWeight.Bold) }
                                 )
                             }
                         }
@@ -164,6 +169,8 @@ fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, 
 fun PlayerRankingList(rankings: List<PlayerRankingResponse>) {
     var sortField by remember { mutableStateOf(RankingSortField.Rating) }
     var descending by remember { mutableStateOf(true) }
+    val horizontalScrollState = rememberScrollState()
+
     val sortedRankings = remember(rankings, sortField, descending) {
         rankings.sortedByField(sortField, descending) { row, field ->
             when (field) {
@@ -178,7 +185,12 @@ fun PlayerRankingList(rankings: List<PlayerRankingResponse>) {
         }
     }
 
-    RankingListScaffold(emptyText = "La classifica verrà popolata dopo le prime partite registrate.", isEmpty = rankings.isEmpty()) {
+    RankingListScaffold(
+        emptyText = "La classifica verrà popolata dopo le prime partite registrate.", 
+        isEmpty = rankings.isEmpty(),
+        isTeamMatch = false,
+        scrollState = horizontalScrollState
+    ) {
         item {
             RankingSortControls(
                 sortField = sortField,
@@ -188,18 +200,19 @@ fun PlayerRankingList(rankings: List<PlayerRankingResponse>) {
             )
         }
         itemsIndexed(sortedRankings, key = { _, player -> player.userId }) { index, player ->
-            RankingCard(
+            RankingRow(
                 position = index + 1,
                 title = player.username ?: "Utente",
-                subtitle = "${player.matchesPlayed} partite giocate",
-                rating = player.rating,
+                subtitle = null,
+                mainValue = player.rating.toString(),
                 stats = listOf(
-                    RankingStatItem("PG", player.matchesPlayed.toString(), RankingStatTone.Purple),
-                    RankingStatItem("GF", player.goalsFor.toString(), RankingStatTone.Blue),
-                    RankingStatItem("GS", player.goalsAgainst.toString(), RankingStatTone.Red),
-                    RankingStatItem("CF", player.cappottiGiven.toString(), RankingStatTone.Orange),
-                    RankingStatItem("CS", player.cappottiReceived.toString(), RankingStatTone.Neutral)
-                )
+                    "PG" to player.matchesPlayed.toString(),
+                    "GF" to player.goalsFor.toString(),
+                    "GS" to player.goalsAgainst.toString(),
+                    "CF" to player.cappottiGiven.toString(),
+                    "CS" to player.cappottiReceived.toString()
+                ),
+                scrollState = horizontalScrollState
             )
         }
     }
@@ -210,6 +223,8 @@ fun TeamRankingList(rankings: List<TeamRankingResponse>, competition: Competitio
     val isTeamType = competition.matchType == "TEAM"
     var sortField by remember { mutableStateOf(if (isTeamType) RankingSortField.Points else RankingSortField.Rating) }
     var descending by remember { mutableStateOf(true) }
+    val horizontalScrollState = rememberScrollState()
+
     val sortedRankings = remember(rankings, sortField, descending) {
         rankings.sortedByField(sortField, descending) { row, field ->
             when (field) {
@@ -228,7 +243,12 @@ fun TeamRankingList(rankings: List<TeamRankingResponse>, competition: Competitio
         }
     }
 
-    RankingListScaffold(emptyText = "La classifica squadre verrà popolata dopo le prime partite registrate.", isEmpty = rankings.isEmpty()) {
+    RankingListScaffold(
+        emptyText = "La classifica squadre verrà popolata dopo le prime partite registrate.", 
+        isEmpty = rankings.isEmpty(),
+        isTeamMatch = isTeamType,
+        scrollState = horizontalScrollState
+    ) {
         item {
             RankingSortControls(
                 sortField = sortField,
@@ -249,30 +269,34 @@ fun TeamRankingList(rankings: List<TeamRankingResponse>, competition: Competitio
                 }
             }
 
-            val stats = mutableListOf<RankingStatItem>()
-            stats.add(RankingStatItem("PG", team.matchesPlayed.toString(), RankingStatTone.Purple))
-            
-            if (isTeamType) {
-                stats.add(RankingStatItem("V", team.wins.toString(), RankingStatTone.Blue))
-                stats.add(RankingStatItem("N", team.draws.toString(), RankingStatTone.Neutral))
-                stats.add(RankingStatItem("P", team.losses.toString(), RankingStatTone.Red))
-                stats.add(RankingStatItem("GF", team.goalsFor.toString(), RankingStatTone.Blue))
-                stats.add(RankingStatItem("GS", team.goalsAgainst.toString(), RankingStatTone.Red))
-                stats.add(RankingStatItem("Diff", team.goalDifference.toString(), RankingStatTone.Neutral))
-                stats.add(RankingStatItem("Punti", team.points.toString(), RankingStatTone.Orange))
+            val mainValue = if (isTeamType) team.points.toString() else team.rating.toString()
+            val stats = if (isTeamType) {
+                listOf(
+                    "PG" to team.matchesPlayed.toString(),
+                    "V" to team.wins.toString(),
+                    "N" to team.draws.toString(),
+                    "P" to team.losses.toString(),
+                    "GF" to team.goalsFor.toString(),
+                    "GS" to team.goalsAgainst.toString(),
+                    "DR" to team.goalDifference.toString()
+                )
             } else {
-                stats.add(RankingStatItem("GF", team.goalsFor.toString(), RankingStatTone.Blue))
-                stats.add(RankingStatItem("GS", team.goalsAgainst.toString(), RankingStatTone.Red))
-                team.cappottiGiven?.let { stats.add(RankingStatItem("CF", it.toString(), RankingStatTone.Orange)) }
-                team.cappottiReceived?.let { stats.add(RankingStatItem("CS", it.toString(), RankingStatTone.Neutral)) }
+                listOf(
+                    "PG" to team.matchesPlayed.toString(),
+                    "GF" to team.goalsFor.toString(),
+                    "GS" to team.goalsAgainst.toString(),
+                    "CF" to (team.cappottiGiven?.toString() ?: "0"),
+                    "CS" to (team.cappottiReceived?.toString() ?: "0")
+                )
             }
 
-            RankingCard(
+            RankingRow(
                 position = index + 1,
                 title = team.teamName,
                 subtitle = subtitle,
-                rating = if (isTeamType) null else team.rating,
-                stats = stats
+                mainValue = mainValue,
+                stats = stats,
+                scrollState = horizontalScrollState
             )
         }
     }
@@ -282,6 +306,8 @@ fun TeamRankingList(rankings: List<TeamRankingResponse>, competition: Competitio
 private fun RankingListScaffold(
     emptyText: String,
     isEmpty: Boolean,
+    isTeamMatch: Boolean,
+    scrollState: androidx.compose.foundation.ScrollState,
     content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit
 ) {
     if (isEmpty) {
@@ -291,12 +317,12 @@ private fun RankingListScaffold(
         ) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                shape = MaterialTheme.shapes.large
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                shape = MaterialTheme.shapes.extraLarge
             ) {
                 Text(
-                    "Nessun dato\n$emptyText",
-                    modifier = Modifier.padding(24.dp).fillMaxWidth(),
+                    "Nessun dato ancora disponibile per questa classifica. $emptyText",
+                    modifier = Modifier.padding(32.dp).fillMaxWidth(),
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -304,27 +330,167 @@ private fun RankingListScaffold(
             }
         }
     } else {
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            content = content
-        )
+        Column(Modifier.fillMaxSize()) {
+            RankingHeader(isTeamMatch, scrollState)
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 12.dp),
+                content = content
+            )
+        }
+    }
+}
+
+@Composable
+private fun RankingHeader(isTeamMatch: Boolean, scrollState: androidx.compose.foundation.ScrollState) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Parte Fissa Sinistra
+            Row(modifier = Modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("POS", modifier = Modifier.width(32.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("NOME", modifier = Modifier.width(120.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            
+            // Parte Scorrevole Centrale
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(scrollState)
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                val headers = if (isTeamMatch) {
+                    listOf("PG", "V", "N", "P", "GF", "GS", "DR")
+                } else {
+                    listOf("PG", "GF", "GS", "CF", "CS")
+                }
+                headers.forEach { header ->
+                    Text(
+                        text = header,
+                        modifier = Modifier.width(24.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
+            // Parte Fissa Destra
+            Text(
+                text = if (isTeamMatch) "PTS" else "RAT",
+                modifier = Modifier.width(55.dp).padding(end = 12.dp),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.End
+            )
+        }
+    }
+}
+
+@Composable
+private fun RankingRow(
+    position: Int,
+    title: String,
+    subtitle: String?,
+    mainValue: String,
+    stats: List<Pair<String, String>>,
+    scrollState: androidx.compose.foundation.ScrollState
+) {
+    val accent = rankAccent(position)
+    Surface(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.padding(vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Parte Fissa Sinistra
+                Row(modifier = Modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = position.toString(),
+                        modifier = Modifier.width(32.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Black,
+                        color = if (position <= 3) accent else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Column(Modifier.width(120.dp)) {
+                        Text(
+                            title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (position <= 3) FontWeight.ExtraBold else FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (!subtitle.isNullOrBlank()) {
+                            Text(
+                                subtitle,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                // Parte Scorrevole Centrale
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(scrollState)
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    stats.forEach { (_, value) ->
+                        Text(
+                            text = value,
+                            modifier = Modifier.width(24.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                // Parte Fissa Destra
+                Text(
+                    text = mainValue,
+                    modifier = Modifier.width(55.dp).padding(end = 12.dp),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.End,
+                    color = if (position <= 3) accent else MaterialTheme.colorScheme.primary
+                )
+            }
+            HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        }
     }
 }
 
 private enum class RankingSortField(val label: String) {
     Rating("Rating"),
     Points("Punti"),
-    GoalsFor("GF"),
-    GoalsAgainst("GS"),
-    GoalDifference("Diff"),
-    Played("PG"),
-    Wins("V"),
-    Draws("N"),
-    Losses("P"),
-    CappottiGiven("CF"),
-    CappottiReceived("CS")
+    GoalsFor("G. Fatti"),
+    GoalsAgainst("G. Subiti"),
+    GoalDifference("Diff. Reti"),
+    Played("Partite"),
+    Wins("Vinte"),
+    Draws("Pareggiate"),
+    Losses("Perse"),
+    CappottiGiven("C. Fatti"),
+    CappottiReceived("C. Subiti")
 }
 
 private fun <T> List<T>.sortedByField(
@@ -347,20 +513,6 @@ private fun <T> List<T>.sortedByField(
     return sortedWith(comparator)
 }
 
-private enum class RankingStatTone {
-    Purple,
-    Blue,
-    Red,
-    Orange,
-    Neutral
-}
-
-private data class RankingStatItem(
-    val label: String,
-    val value: String,
-    val tone: RankingStatTone
-)
-
 @Composable
 private fun RankingSortControls(
     sortField: RankingSortField,
@@ -371,191 +523,76 @@ private fun RankingSortControls(
 ) {
     val isTeamType = matchType == "TEAM"
     val visibleFields = if (isTeamType) {
-        listOf(RankingSortField.Points, RankingSortField.GoalDifference, RankingSortField.Played, RankingSortField.Wins, RankingSortField.Draws, RankingSortField.Losses, RankingSortField.GoalsFor, RankingSortField.GoalsAgainst)
+        listOf(RankingSortField.Points, RankingSortField.GoalDifference, RankingSortField.Played, RankingSortField.Wins)
     } else {
-        listOf(RankingSortField.Rating, RankingSortField.Played, RankingSortField.GoalsFor, RankingSortField.GoalsAgainst, RankingSortField.CappottiGiven, RankingSortField.CappottiReceived)
+        listOf(RankingSortField.Rating, RankingSortField.Played, RankingSortField.GoalsFor)
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            visibleFields.forEach { field ->
-                FilterChip(
-                    selected = sortField == field,
-                    onClick = { onSortFieldChange(field) },
-                    label = { Text(field.label) }
-                )
-            }
-        }
-        OutlinedButton(
-            onClick = onToggleDirection,
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium
-        ) {
-            Icon(
-                if (descending) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(if (descending) "Decrescente" else "Crescente")
-        }
-    }
-}
-
-@Composable
-private fun RankingCard(
-    position: Int,
-    title: String,
-    subtitle: String,
-    rating: Int?,
-    stats: List<RankingStatItem>
-) {
-    val accent = rankAccent(position)
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = BorderStroke(1.dp, accent.copy(alpha = 0.22f))
+        color = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)
     ) {
-        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                RankingPositionBadge(position, accent)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(
-                        title,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    if (subtitle.isNotEmpty()) {
-                        Text(
-                            subtitle,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                if (rating != null) {
-                    RatingBlock(rating)
-                }
-            }
+        Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                stats.forEach { RankingMetricPill(it) }
+                Icon(Icons.AutoMirrored.Filled.Sort, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                visibleFields.forEach { field ->
+                    FilterChip(
+                        selected = sortField == field,
+                        onClick = { onSortFieldChange(field) },
+                        label = { Text(field.label, fontSize = 11.sp) },
+                        shape = MaterialTheme.shapes.small
+                    )
+                }
+                
+                IconButton(onClick = onToggleDirection, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        if (descending) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
     }
-}
-
-@Composable
-private fun RankingPositionBadge(position: Int, accent: Color) {
-    Surface(
-        modifier = Modifier.size(42.dp),
-        shape = MaterialTheme.shapes.medium,
-        color = accent.copy(alpha = 0.16f)
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                "#$position",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = accent
-            )
-        }
-    }
-}
-
-@Composable
-private fun RatingBlock(rating: Int) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-        shape = MaterialTheme.shapes.medium
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalAlignment = Alignment.End
-        ) {
-            Text(
-                "Rating",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                rating.toString(),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-    }
-}
-
-@Composable
-private fun RankingMetricPill(stat: RankingStatItem) {
-    val color = stat.tone.metricColor()
-    Surface(
-        color = color.copy(alpha = 0.10f),
-        shape = MaterialTheme.shapes.medium
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                stat.label,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = color
-            )
-            Spacer(Modifier.width(5.dp))
-            Text(
-                stat.value,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-    }
-}
-
-@Composable
-private fun RankingStatTone.metricColor(): Color = when (this) {
-    RankingStatTone.Purple -> MaterialTheme.colorScheme.tertiary
-    RankingStatTone.Blue -> MaterialTheme.colorScheme.primary
-    RankingStatTone.Red -> MaterialTheme.colorScheme.error
-    RankingStatTone.Orange -> Color(0xFFF57C00)
-    RankingStatTone.Neutral -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 @Composable
 fun rankAccent(rank: Int): Color = when (rank) {
-    1 -> Color(0xFFFFC107)
-    2 -> Color(0xFF9E9E9E)
-    3 -> Color(0xFFF57C00)
+    1 -> Color(0xFFFFD700) // Gold
+    2 -> Color(0xFFC0C0C0) // Silver
+    3 -> Color(0xFFCD7F32) // Bronze
     else -> MaterialTheme.colorScheme.primary
 }
 
 @Composable
 fun UserList(users: List<LeagueUserResponse>, onUserClick: (LeagueUserResponse) -> Unit) {
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         itemsIndexed(users) { _, user ->
-            ElevatedCard(modifier = Modifier.fillMaxWidth().clickable { onUserClick(user) }) {
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { onUserClick(user) },
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
                 ListItem(
-                    headlineContent = { Text(user.username, fontWeight = FontWeight.Bold) },
-                    supportingContent = { Text(user.email ?: "") },
-                    trailingContent = { Text("Rat: ${user.rating}") }
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    headlineContent = { Text(user.username, fontWeight = FontWeight.Black) },
+                    supportingContent = { Text(user.email ?: "Nessuna email") },
+                    trailingContent = { 
+                        Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.small) {
+                            Text(
+                                "Rat: ${user.rating}", 
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 )
             }
         }
