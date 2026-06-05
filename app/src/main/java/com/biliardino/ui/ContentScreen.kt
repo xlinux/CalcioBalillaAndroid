@@ -51,7 +51,7 @@ fun ContentScreen(vm: AppViewModel) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            if (s.currentScreen !is Screen.Splash) {
+            if (s.currentScreen !is Screen.Splash && s.currentScreen !is Screen.Onboarding) {
                 TopAppBar(
                     title = {
                         if (s.currentUser != null || (s.currentScreen !is Screen.PublicLeagues && s.currentScreen !is Screen.AuthMenu)) {
@@ -199,6 +199,7 @@ fun ContentScreen(vm: AppViewModel) {
             Crossfade(targetState = s.currentScreen) { screen ->
                 when (screen) {
                     is Screen.Splash -> SplashScreen()
+                    is Screen.Onboarding -> OnboardingScreen(vm)
                     is Screen.PublicLeagues -> PublicLeaguesScreen(s, vm)
                     is Screen.AuthMenu -> AuthScreen(vm)
                     is Screen.MyLeagues -> MyLeaguesScreen(s, vm)
@@ -214,7 +215,6 @@ fun ContentScreen(vm: AppViewModel) {
                     is Screen.TeamDetail -> TeamDetailScreen(screen.league, screen.season, screen.competition, screen.team, s, vm)
                     is Screen.PlayerDetail -> PlayerDetailScreen(screen.league, screen.season, screen.competition, screen.user, s, vm)
                     is Screen.JoinTeam -> JoinTeamScreen(screen.league, screen.season, screen.competition, s, vm)
-                    else -> {}
                 }
             }
 
@@ -241,6 +241,7 @@ fun ContentScreen(vm: AppViewModel) {
 
 private fun getScreenTitle(screen: Screen): String = when (screen) {
     is Screen.Splash -> "CampionatoCoppe"
+    is Screen.Onboarding -> ""
     is Screen.PublicLeagues -> "Leghe Pubbliche"
     is Screen.AuthMenu -> "Benvenuto"
     is Screen.MyLeagues -> "Le mie Leghe"

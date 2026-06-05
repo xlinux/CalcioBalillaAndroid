@@ -73,6 +73,7 @@ data class UiState(
     val canUseBiometrics: Boolean = false,
     val isBiometricEnabled: Boolean = false,
     val showBiometricSetupPrompt: Boolean = false,
+    val hasSeenOnboarding: Boolean = false,
     val theme: String = "SYSTEM" // "LIGHT", "DARK", "SYSTEM"
 )
 
@@ -93,6 +94,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
+            sessionManager.hasSeenOnboarding.collect { seen ->
+                _state.value = _state.value.copy(hasSeenOnboarding = seen)
+            }
+        }
+        viewModelScope.launch {
             sessionManager.themePreference.collect { theme ->
                 _state.value = _state.value.copy(theme = theme)
             }
@@ -105,6 +111,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun checkSession() = viewModelScope.launch {
+        val hasSeenOnboarding = sessionManager.hasSeenOnboarding.first()
+        if (!hasSeenOnboarding) {
+            _state.value = _state.value.copy(currentScreen = Screen.Onboarding)
+            return@launch
+        }
+
         val token = sessionManager.authToken.first()
         val refreshToken = sessionManager.refreshToken.first()
 
@@ -116,6 +128,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             _state.value = _state.value.copy(currentScreen = Screen.PublicLeagues)
         }
+    }
+
+    fun completeOnboarding() = viewModelScope.launch {
+        sessionManager.setHasSeenOnboarding(true)
+        checkSession() // This will navigate to MyLeagues or PublicLeagues
     }
 
     private fun checkBiometricAvailability() {

@@ -8,6 +8,7 @@ import com.biliardino.model.TeamResponse
 
 sealed class Screen {
     object Splash : Screen()
+    object Onboarding : Screen()
     object PublicLeagues : Screen()
     object AuthMenu : Screen()
     object MyLeagues : Screen()

@@ -15,6 +15,7 @@ class SessionManager(private val context: Context) {
         private val REFRESH_TOKEN_KEY = stringPreferencesKey("refresh_token")
         private val BIO_ENABLED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("biometric_enabled")
         private val THEME_KEY = stringPreferencesKey("theme_preference")
+        private val HAS_SEEN_ONBOARDING_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("has_seen_onboarding")
     }
 
     val authToken: Flow<String?> = context.dataStore.data.map { preferences ->
@@ -48,6 +49,12 @@ class SessionManager(private val context: Context) {
 
     suspend fun setThemePreference(theme: String) {
         context.dataStore.edit { it[THEME_KEY] = theme }
+    }
+
+    val hasSeenOnboarding: Flow<Boolean> = context.dataStore.data.map { it[HAS_SEEN_ONBOARDING_KEY] ?: false }
+
+    suspend fun setHasSeenOnboarding(seen: Boolean) {
+        context.dataStore.edit { it[HAS_SEEN_ONBOARDING_KEY] = seen }
     }
 
     suspend fun clearSession() {
