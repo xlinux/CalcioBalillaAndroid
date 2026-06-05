@@ -13,9 +13,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.biliardino.model.*
 import com.biliardino.ui.components.MatchList
-import com.biliardino.ui.components.ScorePicker
 import com.biliardino.ui.components.SearchableTeamDropdown
 import com.biliardino.viewmodel.AppViewModel
 import com.biliardino.viewmodel.UiState
@@ -50,6 +50,7 @@ fun CompetitionMatchesScreen(league: LeagueResponse, season: SeasonResponse, com
                 } else {
                     Box(Modifier.weight(1f)) {
                         val isAdmin = s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER"
+                        val isCompetitionActive = competition.active ?: (competition.status == "ACTIVE" || competition.status == null)
                         MatchList(
                             matches = s.seasonMatches,
                             teams = s.seasonTeams,
@@ -57,8 +58,10 @@ fun CompetitionMatchesScreen(league: LeagueResponse, season: SeasonResponse, com
                             rankingType = competition.competitionRankingType,
                             calendarGenerationMode = competition.calendarGenerationMode,
                             competitionType = competition.type,
+                            isCompetitionActive = isCompetitionActive,
                             onDeleteMatch = { matchId -> vm.deleteMatch(competition.id, matchId) },
-                            onUpdateResult = { matchId, sA, sB -> vm.updateMatchResult(competition.id, matchId, sA, sB) }
+                            onUpdateResult = { matchId, sA, sB -> vm.updateMatchResult(competition.id, matchId, sA, sB) },
+                            onEditResult = { matchId, sA, sB -> vm.editMatchResult(competition.id, matchId, sA, sB) }
                         )
                     }
                 }
@@ -98,29 +101,51 @@ fun MatchEntryView(teams: List<TeamResponse>, isTeamType: Boolean = false, onCon
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        Text(
-            "Nuova Partita",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
-        )
+        Column(modifier = Modifier.padding(bottom = 8.dp)) {
+            Text(
+                "Nuova Partita",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                "Registra un nuovo incontro e aggiorna le classifiche",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
 
         if (teams.size < 2) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                shape = MaterialTheme.shapes.extraLarge
             ) {
                 Text(
                     "Servono almeno 2 squadre per registrare una partita.",
-                    modifier = Modifier.padding(16.dp),
-                    style = MaterialTheme.typography.bodyMedium
+                    modifier = Modifier.padding(24.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onErrorContainer
                 )
             }
         } else {
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Squadre", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.extraLarge,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text(
+                        "SELEZIONA SQUADRE", 
+                        style = MaterialTheme.typography.labelLarge, 
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.secondary,
+                        letterSpacing = 1.sp
+                    )
                     
                     TeamSelectionRow(
                         label = "Squadra A",
@@ -130,7 +155,7 @@ fun MatchEntryView(teams: List<TeamResponse>, isTeamType: Boolean = false, onCon
                         onTeamSelected = { teamA = it }
                     )
                     
-                    HorizontalDivider(thickness = 0.5.dp)
+                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     
                     TeamSelectionRow(
                         label = "Squadra B",
@@ -142,18 +167,29 @@ fun MatchEntryView(teams: List<TeamResponse>, isTeamType: Boolean = false, onCon
                 }
             }
 
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Risultato", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(12.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.extraLarge,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+            ) {
+                Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "RISULTATO FINALE", 
+                        style = MaterialTheme.typography.labelLarge, 
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.fillMaxWidth(),
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(Modifier.height(20.dp))
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        ScorePicker("A", scoreA, { scoreA = it })
-                        Text("-", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        ScorePicker("B", scoreB, { scoreB = it })
+                        ScoreEntryColumn(teamA?.name ?: "A", scoreA) { scoreA = it }
+                        Text("-", style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+                        ScoreEntryColumn(teamB?.name ?: "B", scoreB) { scoreB = it }
                     }
                 }
             }
@@ -170,15 +206,45 @@ fun MatchEntryView(teams: List<TeamResponse>, isTeamType: Boolean = false, onCon
                         )
                     )
                 },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = MaterialTheme.shapes.medium
+                modifier = Modifier.fillMaxWidth().height(64.dp),
+                shape = MaterialTheme.shapes.extraLarge,
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
             ) {
-                Text("Salva partita", style = MaterialTheme.typography.titleMedium)
+                Text("SALVA RISULTATO", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
             }
         }
 
         TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
-            Text("Annulla")
+            Text("ANNULLA", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun ScoreEntryColumn(label: String, value: Int, onValueChange: (Int) -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        
+        FilledTonalIconButton(onClick = { onValueChange(value + 1) }) {
+            Text("+", style = MaterialTheme.typography.titleLarge)
+        }
+        
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.width(60.dp)
+        ) {
+            Text(
+                text = value.toString(),
+                modifier = Modifier.padding(vertical = 12.dp),
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Black,
+                textAlign = TextAlign.Center
+            )
+        }
+        
+        FilledTonalIconButton(onClick = { if (value > 0) onValueChange(value - 1) }) {
+            Text("-", style = MaterialTheme.typography.titleLarge)
         }
     }
 }

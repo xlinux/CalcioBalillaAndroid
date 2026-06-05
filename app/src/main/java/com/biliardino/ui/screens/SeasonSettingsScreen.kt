@@ -52,6 +52,29 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                 )
             }
 
+            if (competition.active == false && (competition.winnerTeamId != null || competition.winnerUserId != null)) {
+                val winnerName = when {
+                    competition.winnerTeamId != null -> s.seasonTeams.find { it.id == competition.winnerTeamId }?.name
+                    competition.winnerUserId != null -> s.seasonUsers.find { it.userId == competition.winnerUserId }?.username
+                    else -> null
+                }
+                
+                if (winnerName != null) {
+                    ElevatedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.elevatedCardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    ) {
+                        Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("🏆 Vincitore", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Spacer(Modifier.height(8.dp))
+                            Text(winnerName, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            }
+
             InfoCard(
                 title = "Informazioni Generali",
                 description = "Dettagli principali della competizione e stato attuale delle iscrizioni.",

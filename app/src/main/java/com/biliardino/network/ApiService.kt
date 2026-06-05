@@ -79,6 +79,9 @@ interface LeagueApi {
 
     @POST("stagioni/{seasonId}/competizioni")
     suspend fun createCompetition(@Path("seasonId") seasonId: Long, @Body request: CreateCompetitionRequest): CompetitionResponse
+
+    @GET("stagioni/{seasonId}/trophies")
+    suspend fun getTrophies(@Path("seasonId") seasonId: Long): List<TrophyResponse>
 }
 
 interface SportApi {
@@ -191,4 +194,7 @@ interface MatchApi {
 
     @PUT("competitions/matches/{matchId}/result")
     suspend fun updateMatchResult(@Path("matchId") matchId: Long, @Body request: UpdateMatchResultRequest): MatchResponse
+
+    @PUT("competitions/matches/{matchId}/result/edit")
+    suspend fun editMatchResult(@Path("matchId") matchId: Long, @Body request: UpdateMatchResultRequest): MatchResponse
 }

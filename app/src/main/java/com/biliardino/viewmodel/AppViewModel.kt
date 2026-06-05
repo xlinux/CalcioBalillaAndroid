@@ -51,6 +51,7 @@ data class UiState(
     val seasonTeams: List<TeamResponse> = emptyList(),
     val seasonUsers: List<LeagueUserResponse> = emptyList(),
     val leagueMembers: List<LeagueMemberResponse> = emptyList(),
+    val trophies: List<TrophyResponse> = emptyList(),
     val currentTeamStats: TeamStatsResponse? = null,
     val currentTeamRatingHistory: List<RatingHistoryResponse> = emptyList(),
     val currentTeamMatches: List<MatchResponse> = emptyList(),
@@ -487,6 +488,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun loadTrophies(seasonId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching { ApiClientBase.leagues.getTrophies(seasonId) }
+            .onSuccess { 
+                _state.value = _state.value.copy(trophies = it, loading = false) 
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore trofei: ${e.getErrorMessage()}")
+            }
+    }
+
     private fun rankingModeForCompetition(competitionId: Long): String {
         val state = _state.value
         return state.currentCompetition?.takeIf { it.id == competitionId }?.rankingMode
@@ -868,6 +880,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             .onFailure { e ->
                 _state.value = _state.value.copy(loading = false, error = "Errore aggiornamento risultato: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun editMatchResult(competitionId: Long, matchId: Long, scoreA: Int, scoreB: Int) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.matches.editMatchResult(matchId, UpdateMatchResultRequest(scoreA, scoreB)) }
+            .onSuccess {
+                _state.value = _state.value.copy(successMessage = "Risultato modificato!", loading = false)
+                loadCompetitionMatches(competitionId)
+                loadRankings(competitionId)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore modifica risultato: ${e.getErrorMessage()}")
             }
     }
 

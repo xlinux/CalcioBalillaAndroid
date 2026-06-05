@@ -139,7 +139,10 @@ data class CompetitionResponse(
     val currentUserJoined: Boolean = false,
     val matchCreationMode: String = "FREE",
     val calendarGenerationMode: String = "ROUNDS",
-    val registrationOpen: Boolean = true
+    val registrationOpen: Boolean = true,
+    val winnerTeamId: Long? = null,
+    val winnerUserId: Long? = null,
+    val closedAt: String? = null
 )
 
 @Serializable
@@ -416,4 +419,16 @@ data class PlayerPartnerStatsResponse(
     val goalsAgainst: Int,
     val ratingDelta: Int,
     val winPercentage: Double
+)
+
+@Serializable
+data class TrophyResponse(
+    val competitionId: Long,
+    val competitionName: String,
+    val competitionType: String? = null,
+    val winnerTeamId: Long? = null,
+    val winnerTeamName: String? = null,
+    val winnerUserId: Long? = null,
+    val winnerUserName: String? = null,
+    val closedAt: String? = null
 )

@@ -4,21 +4,16 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowCircleRight
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.MilitaryTech
-import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.biliardino.model.CompetitionResponse
@@ -37,71 +32,31 @@ fun SeasonCompetitionsScreen(
     vm: AppViewModel
 ) {
     var competitionToJoin by remember { mutableStateOf<CompetitionResponse?>(null) }
+    var selectedTab by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(selectedTab) {
+        if (selectedTab == 1) {
+            vm.loadTrophies(season.id)
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            if (s.competitions.isEmpty() && !s.loading) {
-                Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)),
-                        shape = MaterialTheme.shapes.extraLarge
-                    ) {
-                        Column(
-                            Modifier.padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                Icons.Default.EmojiEvents,
-                                contentDescription = null,
-                                modifier = Modifier.size(64.dp),
-                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                            )
-                            Spacer(Modifier.height(24.dp))
-                            Text(
-                                "Nessuna Competizione",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "Non ci sono competizioni configurate per questa stagione. Gli amministratori possono crearne di nuove usando il tasto +.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            } else {
-                LazyColumn(
-                    Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    item {
-                        LeagueSectionHeader(
-                            title = "Competizioni disponibili",
-                            count = s.competitions.size
-                        )
-                    }
-                    items(s.competitions) { competition ->
-                        CompetitionCard(
-                            competition = competition,
-                            onClick = {
-                                if (competition.currentUserJoined) {
-                                    vm.selectCompetition(league, season, competition)
-                                } else {
-                                    competitionToJoin = competition
-                                }
-                            }
-                        )
-                    }
+            TabRow(selectedTabIndex = selectedTab) {
+                Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Competizioni") })
+                Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Trofei") })
+            }
+
+            Box(Modifier.weight(1f)) {
+                if (selectedTab == 0) {
+                    CompetitionsTab(league, season, s, vm) { competitionToJoin = it }
+                } else {
+                    TrophiesTab(s)
                 }
             }
         }
 
-        if (s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER") {
+        if (selectedTab == 0 && (s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER")) {
             if (season.active != false) {
                 FloatingActionButton(
                     onClick = { vm.navigateTo(Screen.CreateCompetition(league, season)) },
@@ -158,6 +113,141 @@ fun SeasonCompetitionsScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+fun CompetitionsTab(
+    league: LeagueResponse,
+    season: SeasonResponse,
+    s: UiState,
+    vm: AppViewModel,
+    onJoin: (CompetitionResponse) -> Unit
+) {
+    if (s.competitions.isEmpty() && !s.loading) {
+        Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)),
+                shape = MaterialTheme.shapes.extraLarge
+            ) {
+                Column(
+                    Modifier.padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        Icons.Default.EmojiEvents,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                    )
+                    Spacer(Modifier.height(24.dp))
+                    Text(
+                        "Nessuna Competizione",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Non ci sono competizioni configurate per questa stagione. Gli amministratori possono crearne di nuove usando il tasto +.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    } else {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                LeagueSectionHeader(
+                    title = "Competizioni disponibili",
+                    count = s.competitions.size
+                )
+            }
+            items(s.competitions) { competition ->
+                CompetitionCard(
+                    competition = competition,
+                    onClick = {
+                        if (competition.currentUserJoined) {
+                            vm.selectCompetition(league, season, competition)
+                        } else {
+                            onJoin(competition)
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun TrophiesTab(s: UiState) {
+    if (s.trophies.isEmpty() && !s.loading) {
+        Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+            Text(
+                "Nessun trofeo disponibile per questa stagione.",
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    } else {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                Text(
+                    "Trofei stagione",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+            items(s.trophies) { trophy ->
+                TrophyCard(trophy)
+            }
+        }
+    }
+}
+
+@Composable
+fun TrophyCard(trophy: com.biliardino.model.TrophyResponse) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(48.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            ) {
+                Icon(
+                    Icons.Default.EmojiEvents,
+                    contentDescription = null,
+                    modifier = Modifier.padding(10.dp).fillMaxSize(),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(Modifier.width(16.dp))
+            Column {
+                Text(trophy.competitionName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                val winner = trophy.winnerTeamName ?: trophy.winnerUserName ?: "N/D"
+                Text("Vincitore: $winner", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+            }
+        }
     }
 }
 
