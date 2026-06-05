@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +32,7 @@ fun Context.findFragmentActivity(): FragmentActivity? {
 
 @Composable
 fun AuthScreen(vm: AppViewModel) {
+    val s by vm.state.collectAsState()
     val context = LocalContext.current
     val fragmentActivity = remember(context) { context.findFragmentActivity() }
 
@@ -71,30 +74,57 @@ fun AuthScreen(vm: AppViewModel) {
 
             Spacer(Modifier.height(32.dp))
 
-            // Sezione Centrale: Pulsante Google
+            // Sezione Centrale: Pulsanti di Accesso
             if (fragmentActivity != null) {
-                Card(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.extraLarge,
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Button(
-                        onClick = { vm.googleLogin(fragmentActivity) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(64.dp),
+                    if (s.isBiometricEnabled) {
+                        OutlinedButton(
+                            onClick = { vm.showBiometricPrompt(fragmentActivity) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(64.dp),
+                            shape = MaterialTheme.shapes.extraLarge,
+                            border = ButtonDefaults.outlinedButtonBorder.copy(
+                                width = 2.dp,
+                                brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)
+                            )
+                        ) {
+                            Icon(Icons.Default.Fingerprint, contentDescription = null)
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                text = "Accedi con Biometria",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
                         shape = MaterialTheme.shapes.extraLarge,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
-                        Text(
-                            text = "Accedi con Google",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Button(
+                            onClick = { vm.googleLogin(fragmentActivity) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(64.dp),
+                            shape = MaterialTheme.shapes.extraLarge,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        ) {
+                            Text(
+                                text = "Accedi con Google",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }

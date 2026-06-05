@@ -83,7 +83,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     init {
         ApiClientBase.init(application)
         ApiClientBase.onAuthFailure = {
-            logout()
+            expireSession()
         }
         checkBiometricAvailability()
         viewModelScope.launch {
@@ -106,21 +106,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun checkSession() = viewModelScope.launch {
         val token = sessionManager.authToken.first()
         val refreshToken = sessionManager.refreshToken.first()
-        val bioEnabled = sessionManager.isBiometricEnabled.first()
 
         if (token != null && refreshToken != null) {
             ApiClientBase.authToken = token
-            if (bioEnabled) {
-                // Stay on Splash and wait for biometric or just set a flag to show it
-                // For now, let's keep it simple: if bio is enabled, we will show it on the first screen
-                // or we could stay on Splash until authenticated.
-                // Let's set the screen to Splash (it's already Splash) and wait.
-                _state.value = _state.value.copy(currentScreen = Screen.Splash)
-            } else {
-                loadCurrentUser()
-                _state.value = _state.value.copy(currentScreen = Screen.MyLeagues)
-                loadMyLeagues()
-            }
+            loadCurrentUser()
+            _state.value = _state.value.copy(currentScreen = Screen.MyLeagues)
+            loadMyLeagues()
         } else {
             _state.value = _state.value.copy(currentScreen = Screen.PublicLeagues)
         }
@@ -1038,12 +1029,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun logout() = viewModelScope.launch {
         val canBio = _state.value.canUseBiometrics
+        val bioEnabled = _state.value.isBiometricEnabled
+        if (!bioEnabled) {
+            sessionManager.clearSession()
+        }
+        ApiClientBase.authToken = null
+        _state.value = UiState(currentScreen = Screen.PublicLeagues).copy(
+            canUseBiometrics = canBio,
+            isBiometricEnabled = bioEnabled
+        )
+        loadPublicLeagues()
+    }
+
+    private fun expireSession() = viewModelScope.launch {
+        val canBio = _state.value.canUseBiometrics
         sessionManager.clearSession()
         sessionManager.setBiometricEnabled(false)
         ApiClientBase.authToken = null
         _state.value = UiState(currentScreen = Screen.PublicLeagues).copy(
             canUseBiometrics = canBio,
-            isBiometricEnabled = false
+            isBiometricEnabled = false,
+            error = "Sessione scaduta, effettua nuovamente l'accesso con Google"
         )
         loadPublicLeagues()
     }
@@ -1052,8 +1058,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.userSettings.deleteAccount() }
             .onSuccess {
-                _state.value = _state.value.copy(successMessage = "Account eliminato", loading = false)
-                logout() // Pulisce i dati locali e torna al login
+                val canBio = _state.value.canUseBiometrics
+                sessionManager.clearSession()
+                sessionManager.setBiometricEnabled(false)
+                ApiClientBase.authToken = null
+                _state.value = UiState(currentScreen = Screen.PublicLeagues).copy(
+                    canUseBiometrics = canBio,
+                    isBiometricEnabled = false,
+                    successMessage = "Account eliminato",
+                    loading = false
+                )
+                loadPublicLeagues()
             }
             .onFailure { e ->
                 _state.value = _state.value.copy(loading = false, error = "Errore eliminazione account: ${e.getErrorMessage()}")
@@ -1088,14 +1103,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun handleBiometricSuccess() = viewModelScope.launch {
         val token = sessionManager.authToken.first()
+        val refreshToken = sessionManager.refreshToken.first()
         
-        if (token != null) {
+        if (token != null && refreshToken != null) {
             ApiClientBase.authToken = token
             loadCurrentUser()
             _state.value = _state.value.copy(currentScreen = Screen.MyLeagues, loading = false)
             loadMyLeagues()
         } else {
-            _state.value = _state.value.copy(currentScreen = Screen.PublicLeagues, error = "Sessione Google scaduta")
+            sessionManager.setBiometricEnabled(false)
+            _state.value = _state.value.copy(
+                currentScreen = Screen.PublicLeagues,
+                isBiometricEnabled = false,
+                error = "Sessione scaduta, effettua nuovamente l'accesso con Google"
+            )
         }
     }
 
