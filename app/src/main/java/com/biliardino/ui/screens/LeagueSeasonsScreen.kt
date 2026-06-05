@@ -55,6 +55,9 @@ fun LeagueSeasonsScreen(league: LeagueResponse, s: UiState, vm: AppViewModel) {
     val isOwner = userRole == "OWNER"
     val isAdminOrOwner = isAdmin || isOwner
     val isLeagueActive = league.status == "ACTIVE" || league.status == null
+    
+    val isClub = league.leagueType == "CLUB"
+    val typeName = if (isClub) "Circolo" else "Lega"
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -101,7 +104,7 @@ fun LeagueSeasonsScreen(league: LeagueResponse, s: UiState, vm: AppViewModel) {
                     ) {
                         Icon(Icons.Default.Close, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Chiudi Lega")
+                        Text("Chiudi $typeName")
                     }
 
                     if (selectedTab == 0) {
@@ -129,8 +132,8 @@ fun LeagueSeasonsScreen(league: LeagueResponse, s: UiState, vm: AppViewModel) {
     if (showCloseLeagueDialog) {
         AlertDialog(
             onDismissRequest = { showCloseLeagueDialog = false },
-            title = { Text("Chiudi Lega") },
-            text = { Text("Sei sicuro di voler chiudere definitivamente questa lega? Questa operazione non può essere annullata.") },
+            title = { Text("Chiudi $typeName") },
+            text = { Text("Sei sicuro di voler chiudere definitivamente questo $typeName? Questa operazione non può essere annullata.") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -290,7 +293,7 @@ fun CoverTab(league: LeagueResponse, isOwner: Boolean, onUpload: () -> Unit, onD
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
-                        "In qualità di proprietario, puoi caricare una nuova immagine che verrà usata come copertina della lega.",
+                        "In qualità di proprietario, puoi caricare una nuova immagine che verrà usata come copertina.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                     )
@@ -324,8 +327,9 @@ fun CoverTab(league: LeagueResponse, isOwner: Boolean, onUpload: () -> Unit, onD
                 }
             }
         } else {
+            val typeName = if (league.leagueType == "CLUB") "circolo" else "lega"
             Text(
-                "Questa immagine viene visualizzata come copertina da tutti i membri della lega. Solo il proprietario può modificarla.",
+                "Questa immagine viene visualizzata come copertina da tutti i membri del $typeName. Solo il proprietario può modificarla.",
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

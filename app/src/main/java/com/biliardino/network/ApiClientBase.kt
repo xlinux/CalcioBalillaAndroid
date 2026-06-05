@@ -11,7 +11,7 @@ import retrofit2.Retrofit
 
 object ApiClientBase {
     //private const val BASE_URL = "https://wp1twi5jzp7iiox98gima8cp.212.227.188.124.sslip.io/"
-    private const val BASE_URL = "http://192.168.1.30:8080/"
+    private const val BASE_URL = "http://192.168.1.40:8080/"
 
     var authToken: String? = null
     var onAuthFailure: (() -> Unit)? = null

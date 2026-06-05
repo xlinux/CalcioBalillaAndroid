@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -142,6 +143,8 @@ fun LeagueCard(
                         )
 
                         Spacer(Modifier.width(8.dp))
+                        LeagueTypeBadge(league.leagueType, league.officialClub)
+                        Spacer(Modifier.width(4.dp))
                         LeagueStatusChip(league.status)
                     }
 
@@ -242,6 +245,52 @@ private fun LeagueCoverThumb(league: LeagueResponse) {
                     textAlign = TextAlign.Center
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun LeagueTypeBadge(leagueType: String?, officialClub: Boolean) {
+    val text = when {
+        leagueType == "CLUB" && officialClub -> "Circolo ufficiale"
+        leagueType == "CLUB" -> "Circolo"
+        else -> "Lega privata"
+    }
+    
+    val color = when {
+        leagueType == "CLUB" && officialClub -> MaterialTheme.colorScheme.tertiaryContainer
+        leagueType == "CLUB" -> MaterialTheme.colorScheme.secondaryContainer
+        else -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    
+    val onColor = when {
+        leagueType == "CLUB" && officialClub -> MaterialTheme.colorScheme.onTertiaryContainer
+        leagueType == "CLUB" -> MaterialTheme.colorScheme.onSecondaryContainer
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Surface(
+        color = color,
+        shape = MaterialTheme.shapes.extraSmall
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        ) {
+            if (leagueType == "CLUB" && officialClub) {
+                Icon(
+                    Icons.Default.Verified,
+                    contentDescription = null,
+                    modifier = Modifier.size(12.dp),
+                    tint = onColor
+                )
+                Spacer(Modifier.width(4.dp))
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelSmall,
+                color = onColor
+            )
         }
     }
 }

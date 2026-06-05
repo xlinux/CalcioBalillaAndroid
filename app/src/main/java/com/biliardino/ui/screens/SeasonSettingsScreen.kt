@@ -107,6 +107,8 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
             )
             
             val isAdminOrOwner = s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER"
+            val typeName = if (league.leagueType == "CLUB") "Circolo" else "Lega"
+            
             if (isAdminOrOwner) {
                 Text(
                     "Azioni di Gestione",
@@ -116,7 +118,7 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                 )
 
                 AdminActionCard(
-                    title = "Partecipanti e Squadre",
+                    title = "Membri $typeName e Squadre",
                     description = "Aggiungi o rimuovi giocatori e gestisci le formazioni delle squadre.",
                     buttonText = "GESTISCI",
                     onClick = {

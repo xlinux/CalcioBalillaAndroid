@@ -49,8 +49,9 @@ fun SeasonTeamsScreen(league: LeagueResponse, season: SeasonResponse, competitio
             }
         }
     } else if (competition == null) {
+        val typeName = if (league.leagueType == "CLUB") "circolo" else "lega"
         Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-            Text("Seleziona una competizione per gestire le squadre.", textAlign = TextAlign.Center)
+            Text("Seleziona una competizione del $typeName per gestire le squadre.", textAlign = TextAlign.Center)
         }
     } else {
         Box(Modifier.fillMaxSize()) {

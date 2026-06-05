@@ -46,6 +46,8 @@ data class LeagueResponse( // Renamed from League to match Swagger
     val id: Long,
     val name: String,
     val description: String,
+    val leagueType: String? = "PRIVATE_LEAGUE",
+    val officialClub: Boolean = false,
     val inviteCode: String? = null,
     val coverImageUrl: String? = null,
     val status: String? = null
@@ -54,7 +56,8 @@ data class LeagueResponse( // Renamed from League to match Swagger
 @Serializable
 data class CreateLeagueRequest(
     val name: String,
-    val description: String
+    val description: String,
+    val leagueType: String = "PRIVATE_LEAGUE"
 )
 
 @Serializable

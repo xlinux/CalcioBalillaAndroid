@@ -5,6 +5,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -19,6 +21,7 @@ import com.biliardino.viewmodel.UiState
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MyLeaguesScreen(s: UiState, vm: AppViewModel) {
+    var showTypeSelection by remember { mutableStateOf(false) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var showJoinDialog by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
@@ -113,10 +116,10 @@ fun MyLeaguesScreen(s: UiState, vm: AppViewModel) {
                     onDismissRequest = { showMenu = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Crea Nuova Lega") },
+                        text = { Text("Crea Nuova") },
                         onClick = {
                             showMenu = false
-                            showCreateDialog = true
+                            showTypeSelection = true
                         }
                     )
                     DropdownMenuItem(
@@ -129,16 +132,54 @@ fun MyLeaguesScreen(s: UiState, vm: AppViewModel) {
                 }
             }
 
+            if (showTypeSelection) {
+                AlertDialog(
+                    onDismissRequest = { showTypeSelection = false },
+                    title = { Text("Cosa vuoi creare?") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            CreationOptionCard(
+                                title = "Lega privata",
+                                description = "Ideale per gruppi di amici, colleghi o competizioni private.",
+                                icon = Icons.Default.Security,
+                                onClick = {
+                                    vm.onNewLeagueTypeChange("PRIVATE_LEAGUE")
+                                    showTypeSelection = false
+                                    showCreateDialog = true
+                                }
+                            )
+                            CreationOptionCard(
+                                title = "Circolo / Club",
+                                description = "Ideale per circoli sportivi, club, associazioni e attività organizzate.",
+                                icon = Icons.Default.Groups,
+                                onClick = {
+                                    vm.onNewLeagueTypeChange("CLUB")
+                                    showTypeSelection = false
+                                    showCreateDialog = true
+                                }
+                            )
+                        }
+                    },
+                    confirmButton = {},
+                    dismissButton = {
+                        TextButton(onClick = { showTypeSelection = false }) { Text("Annulla") }
+                    }
+                )
+            }
+
             if (showCreateDialog) {
+                val isClub = s.newLeagueType == "CLUB"
+                val typeName = if (isClub) "Circolo" else "Lega"
+
                 AlertDialog(
                     onDismissRequest = { showCreateDialog = false },
-                    title = { Text("Nuova Lega") },
+                    title = { Text("Nuovo $typeName") },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
                                 value = s.newLeagueName,
                                 onValueChange = vm::onNewLeagueNameChange,
-                                label = { Text("Nome Lega") },
+                                label = { Text("Nome $typeName") },
                                 modifier = Modifier.fillMaxWidth()
                             )
                             OutlinedTextField(
@@ -203,6 +244,43 @@ fun MyLeaguesScreen(s: UiState, vm: AppViewModel) {
                         }
                     }
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CreationOptionCard(
+    title: String,
+    description: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    modifier = Modifier.padding(12.dp).size(24.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+            Spacer(Modifier.width(16.dp))
+            Column {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

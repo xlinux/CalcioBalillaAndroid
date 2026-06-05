@@ -64,6 +64,7 @@ data class UiState(
     // Create League fields
     val newLeagueName: String = "",
     val newLeagueDescription: String = "",
+    val newLeagueType: String = "PRIVATE_LEAGUE", // "PRIVATE_LEAGUE", "CLUB"
     val inviteCode: String = "",
     
     val loading: Boolean = false,
@@ -127,6 +128,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onNewLeagueNameChange(v: String) { _state.value = _state.value.copy(newLeagueName = v) }
     fun onNewLeagueDescriptionChange(v: String) { _state.value = _state.value.copy(newLeagueDescription = v) }
+    fun onNewLeagueTypeChange(v: String) { _state.value = _state.value.copy(newLeagueType = v) }
     fun onInviteCodeChange(v: String) { _state.value = _state.value.copy(inviteCode = v) }
 
     fun navigateTo(screen: Screen) {
@@ -900,23 +902,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun createLeague() = viewModelScope.launch {
         val s = _state.value
         if (s.newLeagueName.isBlank()) {
-            _state.value = s.copy(error = "Il nome della lega è obbligatorio")
+            _state.value = s.copy(error = "Il nome è obbligatorio")
             return@launch
         }
         _state.value = s.copy(loading = true, error = null, successMessage = null)
         runCatching { 
-            ApiClientBase.leagues.createLeague(CreateLeagueRequest(s.newLeagueName, s.newLeagueDescription))
+            ApiClientBase.leagues.createLeague(CreateLeagueRequest(s.newLeagueName, s.newLeagueDescription, s.newLeagueType))
         }.onSuccess { league -> 
+            val typeText = if (s.newLeagueType == "CLUB") "Circolo" else "Lega"
             _state.value = _state.value.copy(
                 loading = false,
-                successMessage = "Lega creata con successo!",
+                successMessage = "$typeText creata con successo!",
                 newLeagueName = "",
                 newLeagueDescription = ""
             )
             selectLeague(league)
             loadMyLeagues()
         }.onFailure { e ->
-            _state.value = _state.value.copy(loading = false, error = "Errore creazione lega: ${e.getErrorMessage()}")
+            _state.value = _state.value.copy(loading = false, error = "Errore creazione: ${e.getErrorMessage()}")
         }
     }
 
