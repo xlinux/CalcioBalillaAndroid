@@ -253,7 +253,10 @@ fun TrophiesTab(
 }
 
 @Composable
-fun TrophyCard(trophy: com.biliardino.model.TrophyResponse, onClick: () -> Unit) {
+fun TrophyCard(trophy: com.biliardino.model.TrophyResponse, showWinner: Boolean = true, onClick: () -> Unit) {
+    val typeLabel = if (trophy.competitionType == "LEAGUE") "Campionato" else "Torneo"
+    val dateLabel = trophy.closedAt?.let { DateUtils.formatDate(it) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         onClick = onClick,
@@ -280,8 +283,13 @@ fun TrophyCard(trophy: com.biliardino.model.TrophyResponse, onClick: () -> Unit)
             Spacer(Modifier.width(16.dp))
             Column {
                 Text(trophy.competitionName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                val winner = trophy.winnerTeamName ?: trophy.winnerUserName ?: "N/D"
-                Text("Vincitore: $winner", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                if (showWinner) {
+                    val winner = trophy.winnerTeamName ?: trophy.winnerUserName ?: "N/D"
+                    Text("Vincitore: $winner", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                } else {
+                    val info = if (dateLabel != null) "$typeLabel · $dateLabel" else typeLabel
+                    Text(info, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     }

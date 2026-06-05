@@ -198,3 +198,11 @@ interface MatchApi {
     @PUT("competitions/matches/{matchId}/result/edit")
     suspend fun editMatchResult(@Path("matchId") matchId: Long, @Body request: UpdateMatchResultRequest): MatchResponse
 }
+
+interface ProfileApi {
+    @GET("profile/players/{userId}/profile")
+    suspend fun getPlayerProfile(@Path("userId") userId: Long): PlayerProfileResponse
+
+    @GET("profile/teams/{teamId}/profile")
+    suspend fun getTeamProfile(@Path("teamId") teamId: Long): TeamProfileResponse
+}

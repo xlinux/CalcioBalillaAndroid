@@ -91,9 +91,32 @@ fun SeasonTeamsScreen(league: LeagueResponse, season: SeasonResponse, competitio
                                 )
                             }
                             items(s.seasonTeams) { team ->
-                                TeamListItem(team, competition.matchType) {
-                                    vm.loadTeamDetailData(competition.id, team.id)
-                                }
+                                val hasPlayers = team.playerAId != null
+                                TeamListItem(
+                                    team = team,
+                                    matchType = competition.matchType,
+                                    onTeamClick = if (!hasPlayers) {
+                                        {
+                                            vm.loadTeamProfile(team.id)
+                                            vm.navigateTo(Screen.TeamProfile(team.id, team.name))
+                                        }
+                                    } else null,
+                                    onPlayerAClick = if (hasPlayers) {
+                                        {
+                                            val pid = team.playerAId
+                                            vm.loadPlayerProfile(pid)
+                                            vm.navigateTo(Screen.PlayerProfile(pid, team.playerAUsername ?: "Giocatore"))
+                                        }
+                                    } else null,
+                                    onPlayerBClick = if (hasPlayers && team.playerBId != null) {
+                                        {
+                                            team.playerBId?.let {
+                                                vm.loadPlayerProfile(it)
+                                                vm.navigateTo(Screen.PlayerProfile(it, team.playerBUsername ?: "Giocatore"))
+                                            }
+                                        }
+                                    } else null
+                                )
                             }
                         }
                     }
@@ -160,44 +183,87 @@ fun SeasonTeamsScreen(league: LeagueResponse, season: SeasonResponse, competitio
 }
 
 @Composable
-fun TeamListItem(team: TeamResponse, matchType: String?, onClick: () -> Unit) {
+fun TeamListItem(
+    team: TeamResponse,
+    matchType: String?,
+    onTeamClick: (() -> Unit)? = null,
+    onPlayerAClick: (() -> Unit)? = null,
+    onPlayerBClick: (() -> Unit)? = null
+) {
     val isTeamType = matchType == "TEAM"
     val isSingle = matchType == "SINGLE"
+    val isDouble = matchType == "DOUBLE"
 
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .then(if (onTeamClick != null) Modifier.clickable(onClick = onTeamClick) else Modifier),
         shape = MaterialTheme.shapes.medium
     ) {
         ListItem(
-            headlineContent = { Text(team.name, fontWeight = FontWeight.Bold) },
+            colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
+            headlineContent = {
+                Text(
+                    text = team.name,
+                    fontWeight = FontWeight.Black,
+                    color = if (onTeamClick != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                )
+            },
             supportingContent = {
-                val subtitle = when {
-                    isTeamType -> null
-                    isSingle -> team.playerAUsername
-                    else -> if (team.playerAUsername != null && team.playerBUsername != null) {
-                        "${team.playerAUsername} & ${team.playerBUsername}"
-                    } else {
-                        team.playerAUsername ?: team.playerBUsername
+                if (isSingle || isDouble) {
+                    Column(modifier = Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        team.playerAUsername?.let { name ->
+                            Surface(
+                                onClick = { onPlayerAClick?.invoke() },
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                                shape = MaterialTheme.shapes.extraSmall
+                            ) {
+                                Text(
+                                    text = "👤 $name >",
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        if (isDouble && team.playerBUsername != null) {
+                            Surface(
+                                onClick = { onPlayerBClick?.invoke() },
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                                shape = MaterialTheme.shapes.extraSmall
+                            ) {
+                                Text(
+                                    text = "👤 ${team.playerBUsername} >",
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 }
-                subtitle?.let { Text(it) }
             },
             trailingContent = {
-                if (!isTeamType) {
-                    team.rating?.let {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = MaterialTheme.shapes.small
-                        ) {
-                            Text(
-                                text = it.toString(),
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (!isTeamType) {
+                        team.rating?.let {
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Text(
+                                    text = it.toString(),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
+                    }
+                    if (onTeamClick != null || onPlayerAClick != null || onPlayerBClick != null) {
+                        Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                     }
                 }
             }

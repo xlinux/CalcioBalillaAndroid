@@ -329,7 +329,9 @@ data class PlayerRankingResponse( // Renamed from PlayerRanking
 data class TeamRankingResponse( // Renamed from TeamRanking
     val teamId: Long,
     val teamName: String,
+    val playerAId: Long? = null,
     val playerAUsername: String? = null,
+    val playerBId: Long? = null,
     val playerBUsername: String? = null,
     val rating: Int,
     val goalsFor: Int,
@@ -431,4 +433,34 @@ data class TrophyResponse(
     val winnerUserId: Long? = null,
     val winnerUserName: String? = null,
     val closedAt: String? = null
+)
+
+@Serializable
+data class PlayerProfileResponse(
+    val userId: Long,
+    val username: String,
+    val matchesPlayed: Int,
+    val wins: Int,
+    val draws: Int = 0,
+    val losses: Int,
+    val goalsFor: Int,
+    val goalsAgainst: Int,
+    val goalDifference: Int,
+    val winPercentage: Double,
+    val trophies: List<TrophyResponse> = emptyList()
+)
+
+@Serializable
+data class TeamProfileResponse(
+    val teamId: Long,
+    val teamName: String,
+    val matchesPlayed: Int,
+    val wins: Int,
+    val draws: Int = 0,
+    val losses: Int,
+    val goalsFor: Int,
+    val goalsAgainst: Int,
+    val goalDifference: Int,
+    val winPercentage: Double,
+    val trophies: List<TrophyResponse> = emptyList()
 )

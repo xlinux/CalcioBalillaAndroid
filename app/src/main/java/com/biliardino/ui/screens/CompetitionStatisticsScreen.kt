@@ -121,10 +121,10 @@ fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, 
                             }
                         }
                         when {
-                            showPlayerRanking && showTeamRanking && rankingTab == 0 -> PlayerRankingList(s.playerRankings)
-                            showPlayerRanking && showTeamRanking -> TeamRankingList(s.teamRankings, competition)
-                            showPlayerRanking -> PlayerRankingList(s.playerRankings)
-                            else -> TeamRankingList(s.teamRankings, competition)
+                            showPlayerRanking && showTeamRanking && rankingTab == 0 -> PlayerRankingList(s.playerRankings, vm)
+                            showPlayerRanking && showTeamRanking -> TeamRankingList(s.teamRankings, competition, vm)
+                            showPlayerRanking -> PlayerRankingList(s.playerRankings, vm)
+                            else -> TeamRankingList(s.teamRankings, competition, vm)
                         }
                     }
                     1 -> {
@@ -166,7 +166,7 @@ fun CompetitionStatisticsScreen(league: LeagueResponse, season: SeasonResponse, 
 }
 
 @Composable
-fun PlayerRankingList(rankings: List<PlayerRankingResponse>) {
+fun PlayerRankingList(rankings: List<PlayerRankingResponse>, vm: AppViewModel) {
     var sortField by remember { mutableStateOf(RankingSortField.Rating) }
     var descending by remember { mutableStateOf(true) }
     val horizontalScrollState = rememberScrollState()
@@ -212,14 +212,18 @@ fun PlayerRankingList(rankings: List<PlayerRankingResponse>) {
                     "CF" to player.cappottiGiven.toString(),
                     "CS" to player.cappottiReceived.toString()
                 ),
-                scrollState = horizontalScrollState
+                scrollState = horizontalScrollState,
+                onRowClick = {
+                    vm.loadPlayerProfile(player.userId)
+                    vm.navigateTo(Screen.PlayerProfile(player.userId, player.username ?: "Giocatore"))
+                }
             )
         }
     }
 }
 
 @Composable
-fun TeamRankingList(rankings: List<TeamRankingResponse>, competition: CompetitionResponse) {
+fun TeamRankingList(rankings: List<TeamRankingResponse>, competition: CompetitionResponse, vm: AppViewModel) {
     val isTeamType = competition.matchType == "TEAM"
     var sortField by remember { mutableStateOf(if (isTeamType) RankingSortField.Points else RankingSortField.Rating) }
     var descending by remember { mutableStateOf(true) }
@@ -259,15 +263,12 @@ fun TeamRankingList(rankings: List<TeamRankingResponse>, competition: Competitio
             )
         }
         itemsIndexed(sortedRankings, key = { _, team -> team.teamId }) { index, team ->
-            val subtitle = when (competition.matchType) {
-                "TEAM" -> team.playerAUsername ?: ""
-                "SINGLE" -> team.playerAUsername ?: "Utente"
-                else -> {
-                    val playerA = team.playerAUsername ?: "Utente"
-                    val playerB = team.playerBUsername ?: "Utente"
-                    "$playerA + $playerB"
-                }
-            }
+            val isTeam = team.playerAId == null
+            val isDouble = team.playerAId != null && team.playerBId != null
+            val isSingle = team.playerAId != null && team.playerBId == null
+
+            val title = if (isDouble || isSingle) team.playerAUsername ?: team.teamName else team.teamName
+            val subtitle = if (isDouble) team.playerBUsername else null
 
             val mainValue = if (isTeamType) team.points.toString() else team.rating.toString()
             val stats = if (isTeamType) {
@@ -292,11 +293,33 @@ fun TeamRankingList(rankings: List<TeamRankingResponse>, competition: Competitio
 
             RankingRow(
                 position = index + 1,
-                title = team.teamName,
+                title = title,
                 subtitle = subtitle,
                 mainValue = mainValue,
                 stats = stats,
-                scrollState = horizontalScrollState
+                scrollState = horizontalScrollState,
+                onTitleClick = if (!isTeam) {
+                    {
+                        team.playerAId?.let {
+                            vm.loadPlayerProfile(it)
+                            vm.navigateTo(Screen.PlayerProfile(it, team.playerAUsername ?: "Giocatore"))
+                        }
+                    }
+                } else null,
+                onSubtitleClick = if (isDouble) {
+                    {
+                        team.playerBId?.let {
+                            vm.loadPlayerProfile(it)
+                            vm.navigateTo(Screen.PlayerProfile(it, team.playerBUsername ?: "Giocatore"))
+                        }
+                    }
+                } else null,
+                onRowClick = if (isTeam) {
+                    {
+                        vm.loadTeamProfile(team.teamId)
+                        vm.navigateTo(Screen.TeamProfile(team.teamId, team.teamName))
+                    }
+                } else null
             )
         }
     }
@@ -354,7 +377,7 @@ private fun RankingHeader(isTeamMatch: Boolean, scrollState: androidx.compose.fo
             // Parte Fissa Sinistra
             Row(modifier = Modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("POS", modifier = Modifier.width(32.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("NOME", modifier = Modifier.width(120.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("NOME", modifier = Modifier.width(150.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             
             // Parte Scorrevole Centrale
@@ -403,11 +426,16 @@ private fun RankingRow(
     subtitle: String?,
     mainValue: String,
     stats: List<Pair<String, String>>,
-    scrollState: androidx.compose.foundation.ScrollState
+    scrollState: androidx.compose.foundation.ScrollState,
+    onTitleClick: (() -> Unit)? = null,
+    onSubtitleClick: (() -> Unit)? = null,
+    onRowClick: (() -> Unit)? = null
 ) {
     val accent = rankAccent(position)
     Surface(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onRowClick != null) Modifier.clickable(onClick = onRowClick) else Modifier)
     ) {
         Column {
             Row(
@@ -424,21 +452,24 @@ private fun RankingRow(
                         color = if (position <= 3) accent else MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Column(Modifier.width(120.dp)) {
+                    Column(Modifier.width(150.dp)) {
                         Text(
                             title,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = if (position <= 3) FontWeight.ExtraBold else FontWeight.Bold,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = if (onTitleClick != null) Modifier.clickable(onClick = onTitleClick) else Modifier,
+                            color = if (onTitleClick != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                         )
                         if (!subtitle.isNullOrBlank()) {
                             Text(
                                 subtitle,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (onSubtitleClick != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = if (onSubtitleClick != null) Modifier.clickable(onClick = onSubtitleClick) else Modifier
                             )
                         }
                     }

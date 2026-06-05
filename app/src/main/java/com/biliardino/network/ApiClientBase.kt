@@ -65,4 +65,5 @@ object ApiClientBase {
     val competitions: CompetitionApi by lazy { service(CompetitionApi::class.java) }
     val matches: MatchApi by lazy { service(MatchApi::class.java) }
     val sports: SportApi by lazy { service(SportApi::class.java) }
+    val profile: ProfileApi by lazy { service(ProfileApi::class.java) }
 }

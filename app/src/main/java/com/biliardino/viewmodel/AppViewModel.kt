@@ -61,6 +61,8 @@ data class UiState(
     val currentPlayerPartners: List<PlayerPartnerStatsResponse> = emptyList(),
     val currentPlayerMatches: List<MatchResponse> = emptyList(),
     val currentUserRoleInLeague: String? = null,
+    val currentPlayerProfile: PlayerProfileResponse? = null,
+    val currentTeamProfile: TeamProfileResponse? = null,
     
     // Create League fields
     val newLeagueName: String = "",
@@ -496,6 +498,28 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             .onFailure { e ->
                 _state.value = _state.value.copy(loading = false, error = "Errore trofei: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun loadPlayerProfile(userId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching { ApiClientBase.profile.getPlayerProfile(userId) }
+            .onSuccess { profile ->
+                _state.value = _state.value.copy(currentPlayerProfile = profile, loading = false)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore profilo giocatore: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun loadTeamProfile(teamId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching { ApiClientBase.profile.getTeamProfile(teamId) }
+            .onSuccess { profile ->
+                _state.value = _state.value.copy(currentTeamProfile = profile, loading = false)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore profilo squadra: ${e.getErrorMessage()}")
             }
     }
 

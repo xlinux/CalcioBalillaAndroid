@@ -91,6 +91,26 @@ fun ContentScreen(vm: AppViewModel) {
                                 is Screen.SeasonSettings -> vm.navigateTo(Screen.SeasonCompetitions(screen.league, screen.season))
                                 is Screen.TeamDetail -> vm.navigateTo(Screen.CompetitionStatistics(screen.league, screen.season, screen.competition))
                                 is Screen.PlayerDetail -> vm.navigateTo(Screen.CompetitionStatistics(screen.league, season = screen.season, competition = screen.competition))
+                                is Screen.PlayerProfile -> {
+                                    val league = s.currentLeague
+                                    val season = s.currentSeason
+                                    val competition = s.currentCompetition
+                                    if (league != null && season != null && competition != null) {
+                                        vm.navigateTo(Screen.CompetitionStatistics(league, season, competition))
+                                    } else {
+                                        vm.navigateTo(Screen.MyLeagues)
+                                    }
+                                }
+                                is Screen.TeamProfile -> {
+                                    val league = s.currentLeague
+                                    val season = s.currentSeason
+                                    val competition = s.currentCompetition
+                                    if (league != null && season != null && competition != null) {
+                                        vm.navigateTo(Screen.CompetitionStatistics(league, season, competition))
+                                    } else {
+                                        vm.navigateTo(Screen.MyLeagues)
+                                    }
+                                }
                                 is Screen.JoinTeam -> vm.navigateTo(Screen.SeasonCompetitions(screen.league, screen.season))
                                 else -> {}
                             }
@@ -214,6 +234,8 @@ fun ContentScreen(vm: AppViewModel) {
                     is Screen.SeasonSettings -> SeasonSettingsScreen(screen.league, screen.season, screen.competition, s, vm)
                     is Screen.TeamDetail -> TeamDetailScreen(screen.league, screen.season, screen.competition, screen.team, s, vm)
                     is Screen.PlayerDetail -> PlayerDetailScreen(screen.league, screen.season, screen.competition, screen.user, s, vm)
+                    is Screen.PlayerProfile -> PlayerProfileScreen(screen.userId, screen.name, s, vm)
+                    is Screen.TeamProfile -> TeamProfileScreen(screen.teamId, screen.name, s, vm)
                     is Screen.JoinTeam -> JoinTeamScreen(screen.league, screen.season, screen.competition, s, vm)
                 }
             }
@@ -256,5 +278,7 @@ private fun getScreenTitle(screen: Screen): String = when (screen) {
     is Screen.SeasonSettings -> "Impostazioni"
     is Screen.TeamDetail -> screen.team.name
     is Screen.PlayerDetail -> screen.user.username
+    is Screen.PlayerProfile -> "Profilo: ${screen.name}"
+    is Screen.TeamProfile -> "Profilo: ${screen.name}"
     is Screen.JoinTeam -> "Partecipa alla Squadra"
 }

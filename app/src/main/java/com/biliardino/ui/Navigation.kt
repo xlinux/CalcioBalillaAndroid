@@ -23,5 +23,7 @@ sealed class Screen {
     data class SeasonSettings(val league: LeagueResponse, val season: SeasonResponse, val competition: CompetitionResponse? = null) : Screen()
     data class TeamDetail(val league: LeagueResponse, val season: SeasonResponse, val competition: CompetitionResponse, val team: TeamResponse) : Screen()
     data class PlayerDetail(val league: LeagueResponse, val season: SeasonResponse, val competition: CompetitionResponse, val user: LeagueUserResponse) : Screen()
+    data class PlayerProfile(val userId: Long, val name: String) : Screen()
+    data class TeamProfile(val teamId: Long, val name: String) : Screen()
     data class JoinTeam(val league: LeagueResponse, val season: SeasonResponse, val competition: CompetitionResponse) : Screen()
 }
