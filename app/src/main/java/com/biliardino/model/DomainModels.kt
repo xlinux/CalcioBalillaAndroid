@@ -428,6 +428,8 @@ data class TrophyResponse(
     val competitionId: Long,
     val competitionName: String,
     val competitionType: String? = null,
+    val sportName: String? = null,
+    val matchType: String? = null,
     val winnerTeamId: Long? = null,
     val winnerTeamName: String? = null,
     val winnerUserId: Long? = null,

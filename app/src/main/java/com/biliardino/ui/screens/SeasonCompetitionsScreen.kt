@@ -5,7 +5,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -13,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -241,8 +241,8 @@ fun TrophiesTab(
                 )
             }
             items(s.trophies) { trophy ->
-                TrophyCard(trophy) {
-                    val comp = s.competitions.find { it.id == trophy.competitionId }
+                val comp = s.competitions.find { it.id == trophy.competitionId }
+                TrophyCard(trophy, competition = comp) {
                     if (comp != null) {
                         vm.selectCompetition(league, season, comp)
                     }
@@ -253,45 +253,248 @@ fun TrophiesTab(
 }
 
 @Composable
-fun TrophyCard(trophy: com.biliardino.model.TrophyResponse, showWinner: Boolean = true, onClick: () -> Unit) {
-    val typeLabel = if (trophy.competitionType == "LEAGUE") "Campionato" else "Torneo"
+fun TrophyCard(
+    trophy: com.biliardino.model.TrophyResponse,
+    showWinner: Boolean = true,
+    competition: CompetitionResponse? = null,
+    onClick: () -> Unit
+) {
+    val sportLabel = competition?.sportName?.takeIf { it.isNotBlank() }
+        ?: trophy.sportName?.takeIf { it.isNotBlank() }
+        ?: "Sport non definito"
+    val typeLabel = competitionTypeLabel(competition?.type ?: trophy.competitionType)
+    val rankingLabel = rankingModeLabel(competition?.rankingMode)
+    val matchTypeLabel = matchTypeLabel(competition?.matchType ?: trophy.matchType)
     val dateLabel = trophy.closedAt?.let { DateUtils.formatDate(it) }
+    val teamWinnerName = trophy.winnerTeamName
+        ?.takeIf { trophy.winnerTeamId != null && it.isNotBlank() }
+        ?.trim()
+    val playerWinnerName = trophy.winnerUserName
+        ?.takeIf { trophy.winnerUserId != null && it.isNotBlank() }
+        ?.trim()
 
     Card(
         modifier = Modifier.fillMaxWidth(),
         onClick = onClick,
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, Color(0xFFFFC107).copy(alpha = 0.28f))
     ) {
-        Row(
-            Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Surface(
-                modifier = Modifier.size(48.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.EmojiEvents,
                     contentDescription = null,
-                    modifier = Modifier.padding(10.dp).fillMaxSize(),
-                    tint = MaterialTheme.colorScheme.primary
+                    modifier = Modifier.size(22.dp),
+                    tint = Color(0xFFFFB300)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    trophy.competitionName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
             }
-            Spacer(Modifier.width(16.dp))
-            Column {
-                Text(trophy.competitionName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                if (showWinner) {
-                    val winner = trophy.winnerTeamName ?: trophy.winnerUserName ?: "N/D"
-                    Text("Vincitore: $winner", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-                } else {
-                    val info = if (dateLabel != null) "$typeLabel · $dateLabel" else typeLabel
-                    Text(info, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            if (showWinner) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (teamWinnerName != null) {
+                        TrophyWinnerBlock(
+                            icon = Icons.Default.EmojiEvents,
+                            title = "Squadra vincitrice",
+                            name = teamWinnerName,
+                            color = Color(0xFFFFB300)
+                        )
+                    }
+                    if (playerWinnerName != null) {
+                        TrophyWinnerBlock(
+                            icon = Icons.Default.MilitaryTech,
+                            title = "Miglior giocatore",
+                            name = playerWinnerName,
+                            color = Color(0xFFF57C00)
+                        )
+                    }
+                    if (teamWinnerName == null && playerWinnerName == null) {
+                        Text(
+                            "Vincitore da definire",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TrophyInfoTile(
+                        icon = sportIcon(sportLabel),
+                        title = "Sport",
+                        value = sportLabel,
+                        color = Color(0xFF2E7D32),
+                        modifier = Modifier.weight(1f)
+                    )
+                    TrophyInfoTile(
+                        icon = Icons.Default.Flag,
+                        title = "Tipo",
+                        value = typeLabel,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TrophyInfoTile(
+                        icon = rankingIcon(competition?.rankingMode),
+                        title = "Classifica",
+                        value = rankingLabel,
+                        color = Color(0xFF7B1FA2),
+                        modifier = Modifier.weight(1f)
+                    )
+                    TrophyInfoTile(
+                        icon = Icons.Default.Groups,
+                        title = "Formato",
+                        value = matchTypeLabel,
+                        color = Color(0xFFF57C00),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            if (dateLabel != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.EventAvailable,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "Chiuso il $dateLabel",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TrophyWinnerBlock(icon: ImageVector, title: String, name: String, color: Color) {
+    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(24.dp)
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                name,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun TrophyInfoTile(
+    icon: ImageVector,
+    title: String,
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
+        color = color.copy(alpha = 0.10f)
+    ) {
+        Row(
+            Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(18.dp)
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+                Text(
+                    value,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+private fun competitionTypeLabel(type: String?): String = when (type?.uppercase()) {
+    "LEAGUE" -> "Campionato"
+    "CUP", "TOURNAMENT" -> "Torneo"
+    null, "" -> "Tipo non definito"
+    else -> type
+}
+
+private fun matchTypeLabel(matchType: String?): String = when (matchType?.uppercase()) {
+    "SINGLE" -> "Singolo"
+    "DOUBLE" -> "Doppio"
+    "TEAM" -> "Squadra"
+    null, "" -> "Non definito"
+    else -> matchType
+}
+
+private fun rankingModeLabel(rankingMode: String?): String = when (rankingMode?.uppercase()) {
+    "PLAYER" -> "Giocatori"
+    "TEAM" -> "Squadre"
+    "BOTH" -> "Entrambe"
+    null, "" -> "Non definita"
+    else -> rankingMode
+}
+
+private fun rankingIcon(rankingMode: String?): ImageVector = when (rankingMode?.uppercase()) {
+    "PLAYER" -> Icons.Default.Person
+    "TEAM" -> Icons.Default.Groups
+    else -> Icons.Default.Groups
+}
+
+private fun sportIcon(sportName: String): ImageVector {
+    val normalized = sportName.trim().lowercase()
+    return when {
+        normalized.contains("calcio") -> Icons.Default.SportsSoccer
+        normalized.contains("tennis") || normalized.contains("padel") -> Icons.Default.SportsTennis
+        normalized.contains("biliardino") || normalized.contains("biliardo") -> Icons.Default.GridOn
+        else -> Icons.Default.Sports
     }
 }
 

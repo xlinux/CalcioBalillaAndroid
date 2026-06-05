@@ -52,24 +52,33 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                 )
             }
 
-            if (competition.active == false && (competition.winnerTeamId != null || competition.winnerUserId != null)) {
-                val winnerName = when {
-                    competition.winnerTeamId != null -> s.seasonTeams.find { it.id == competition.winnerTeamId }?.name
-                    competition.winnerUserId != null -> s.seasonUsers.find { it.userId == competition.winnerUserId }?.username
-                    else -> null
-                }
-                
-                if (winnerName != null) {
-                    ElevatedCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.elevatedCardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        )
-                    ) {
-                        Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("🏆 Vincitore", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            Spacer(Modifier.height(8.dp))
-                            Text(winnerName, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+            if (competition.active == false) {
+                val showTeamWinner = (competition.rankingMode == "TEAM" || competition.rankingMode == "BOTH") && competition.winnerTeamId != null
+                val showPlayerWinner = (competition.rankingMode == "PLAYER" || competition.rankingMode == "BOTH") && competition.winnerUserId != null
+
+                if (showTeamWinner || showPlayerWinner) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (showTeamWinner) {
+                            val teamName = s.seasonTeams.find { it.id == competition.winnerTeamId }?.name
+                            if (teamName != null) {
+                                WinnerCard(
+                                    title = "🏆 Squadra vincitrice",
+                                    name = teamName,
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        if (showPlayerWinner) {
+                            val playerName = s.seasonUsers.find { it.userId == competition.winnerUserId }?.username
+                            if (playerName != null) {
+                                WinnerCard(
+                                    title = if (competition.rankingMode == "BOTH") "🥇 Miglior giocatore" else "🥇 Vincitore",
+                                    name = playerName,
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.secondary
+                                )
+                            }
                         }
                     }
                 }
@@ -342,6 +351,39 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun WinnerCard(
+    title: String,
+    name: String,
+    containerColor: Color,
+    contentColor: Color
+) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.elevatedCardColors(containerColor = containerColor)
+    ) {
+        Column(
+            Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = name,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color = contentColor,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
