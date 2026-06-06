@@ -82,6 +82,12 @@ interface LeagueApi {
 
     @GET("stagioni/{seasonId}/trophies")
     suspend fun getTrophies(@Path("seasonId") seasonId: Long): List<TrophyResponse>
+
+    @GET("leghe/{leagueId}/comments")
+    suspend fun getLeagueComments(@Path("leagueId") leagueId: Long): List<LeagueCommentResponse>
+
+    @POST("leghe/{leagueId}/comments")
+    suspend fun addLeagueComment(@Path("leagueId") leagueId: Long, @Body request: CreateLeagueCommentRequest): LeagueCommentResponse
 }
 
 interface SportApi {

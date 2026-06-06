@@ -6,10 +6,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChevronRight
@@ -67,6 +71,12 @@ fun LeagueSeasonsScreen(league: LeagueResponse, s: UiState, vm: AppViewModel) {
 
     val currentLeague = s.currentLeague ?: league
 
+    LaunchedEffect(selectedTab) {
+        if (selectedTab == 1) {
+            vm.loadLeagueComments(league.id)
+        }
+    }
+
     Column(Modifier.fillMaxSize()) {
         TabRow(
             selectedTabIndex = selectedTab,
@@ -74,21 +84,23 @@ fun LeagueSeasonsScreen(league: LeagueResponse, s: UiState, vm: AppViewModel) {
             divider = {}
         ) {
             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Stagioni", fontWeight = FontWeight.Bold) })
+            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Chat", fontWeight = FontWeight.Bold) })
             if (isAdminOrOwner) {
-                Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Membri", fontWeight = FontWeight.Bold) })
+                Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Membri", fontWeight = FontWeight.Bold) })
             }
-            Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Copertina", fontWeight = FontWeight.Bold) })
+            Tab(selected = selectedTab == (if (isAdminOrOwner) 3 else 2), onClick = { selectedTab = if (isAdminOrOwner) 3 else 2 }, text = { Text("Copertina", fontWeight = FontWeight.Bold) })
         }
 
         Box(Modifier.weight(1f)) {
             when (selectedTab) {
                 0 -> SeasonsTab(currentLeague, s, vm)
-                1 -> if (isAdminOrOwner) MembersTab(league, s, vm) else SeasonsTab(currentLeague, s, vm)
-                2 -> CoverTab(currentLeague, isOwner, onUpload = { launcher.launch("image/*") }, onDelete = { vm.deleteLeagueCover(league.id) })
+                1 -> LeagueChatTab(league, s, vm)
+                2 -> if (isAdminOrOwner) MembersTab(league, s, vm) else CoverTab(currentLeague, isOwner, onUpload = { launcher.launch("image/*") }, onDelete = { vm.deleteLeagueCover(league.id) })
+                3 -> if (isAdminOrOwner) CoverTab(currentLeague, isOwner, onUpload = { launcher.launch("image/*") }, onDelete = { vm.deleteLeagueCover(league.id) })
             }
         }
 
-        if (isAdminOrOwner && isLeagueActive) {
+        if (isAdminOrOwner && isLeagueActive && selectedTab != 1) {
             Surface(
                 tonalElevation = 6.dp,
                 shadowElevation = 12.dp,
@@ -147,6 +159,77 @@ fun LeagueSeasonsScreen(league: LeagueResponse, s: UiState, vm: AppViewModel) {
                 TextButton(onClick = { showCloseLeagueDialog = false }) { Text("Annulla") }
             }
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LeagueChatTab(league: LeagueResponse, s: UiState, vm: AppViewModel) {
+    var messageText by remember { mutableStateOf("") }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    LaunchedEffect(s.leagueComments.size) {
+        if (s.leagueComments.isNotEmpty()) {
+            listState.animateScrollToItem(s.leagueComments.size - 1)
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+            isRefreshing = s.loading,
+            onRefresh = { vm.loadLeagueComments(league.id) },
+            modifier = Modifier.weight(1f)
+        ) {
+            if (s.leagueComments.isEmpty() && !s.loading) {
+                val typeName = if (league.leagueType == "CLUB") "circolo" else "lega"
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Nessun messaggio in questo $typeName. Inizia tu!", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                val sortedComments = remember(s.leagueComments) {
+                    s.leagueComments.sortedBy { it.createdAt }
+                }
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    itemsIndexed(sortedComments, key = { _, c -> c.id }) { _, comment ->
+                        val isMe = comment.userId == s.currentUser?.userId
+                        CommentBubble(comment.username, comment.message, comment.createdAt, isMe)
+                    }
+                }
+            }
+        }
+
+        Surface(tonalElevation = 4.dp, modifier = Modifier.fillMaxWidth()) {
+            Row(modifier = Modifier.padding(12.dp).imePadding(), verticalAlignment = Alignment.Bottom) {
+                OutlinedTextField(
+                    value = messageText,
+                    onValueChange = { if (it.length <= 1000) messageText = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Scrivi un messaggio...") },
+                    maxLines = 4,
+                    shape = RoundedCornerShape(24.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                FloatingActionButton(
+                    onClick = {
+                        if (messageText.isNotBlank()) {
+                            vm.addLeagueComment(league.id, messageText)
+                            messageText = ""
+                        }
+                    },
+                    modifier = Modifier.size(48.dp),
+                    shape = CircleShape,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Send, "Invia", modifier = Modifier.size(20.dp))
+                }
+            }
+        }
     }
 }
 

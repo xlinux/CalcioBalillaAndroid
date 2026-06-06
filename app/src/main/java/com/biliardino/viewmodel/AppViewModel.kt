@@ -65,6 +65,7 @@ data class UiState(
     val currentTeamProfile: TeamProfileResponse? = null,
     val matchComments: List<MatchCommentResponse> = emptyList(),
     val competitionComments: List<CompetitionCommentResponse> = emptyList(),
+    val leagueComments: List<LeagueCommentResponse> = emptyList(),
     
     // Create League fields
     val newLeagueName: String = "",
@@ -570,6 +571,30 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             .onFailure { e ->
                 _state.value = _state.value.copy(loading = false, error = "Errore invio messaggio competizione: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun loadLeagueComments(leagueId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching { ApiClientBase.leagues.getLeagueComments(leagueId) }
+            .onSuccess { comments ->
+                _state.value = _state.value.copy(leagueComments = comments, loading = false)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore commenti lega: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun addLeagueComment(leagueId: Long, message: String) = viewModelScope.launch {
+        if (message.isBlank()) return@launch
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching { ApiClientBase.leagues.addLeagueComment(leagueId, CreateLeagueCommentRequest(message)) }
+            .onSuccess {
+                _state.value = _state.value.copy(loading = false)
+                loadLeagueComments(leagueId)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore invio messaggio lega: ${e.getErrorMessage()}")
             }
     }
 

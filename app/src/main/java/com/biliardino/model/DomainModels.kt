@@ -341,6 +341,21 @@ data class CreateCompetitionCommentRequest(
     val message: String
 )
 
+@Serializable
+data class LeagueCommentResponse(
+    val id: Long,
+    val leagueId: Long,
+    val userId: Long,
+    val username: String,
+    val message: String,
+    val createdAt: String
+)
+
+@Serializable
+data class CreateLeagueCommentRequest(
+    val message: String
+)
+
 // --- Classifiche & Statistiche ---
 
 @Serializable

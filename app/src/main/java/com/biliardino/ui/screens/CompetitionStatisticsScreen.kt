@@ -370,7 +370,7 @@ fun CompetitionChatTab(competitionId: Long, s: UiState, vm: AppViewModel) {
                 ) {
                     itemsIndexed(sortedComments, key = { _, c -> c.id }) { _, comment ->
                         val isMe = comment.userId == s.currentUser?.userId
-                        com.biliardino.ui.screens.CommentBubble(comment.username, comment.message, comment.createdAt, isMe)
+                        CommentBubble(comment.username, comment.message, comment.createdAt, isMe)
                     }
                 }
             }
