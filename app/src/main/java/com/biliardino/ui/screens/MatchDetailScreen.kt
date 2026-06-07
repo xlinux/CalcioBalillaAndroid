@@ -31,6 +31,9 @@ import kotlinx.coroutines.launch
 fun MatchDetailScreen(match: MatchResponse, s: UiState, vm: AppViewModel) {
     var selectedTab by remember { mutableIntStateOf(0) }
     
+    // Use the most up-to-date match data from state if available, fallback to the one from navigation
+    val currentMatch = s.seasonMatches.find { it.id == match.id } ?: match
+
     Column(modifier = Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = selectedTab) {
             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Dettaglio") })
@@ -38,8 +41,8 @@ fun MatchDetailScreen(match: MatchResponse, s: UiState, vm: AppViewModel) {
         }
         
         when (selectedTab) {
-            0 -> MatchSummaryTab(match, s, vm)
-            1 -> MatchChatTab(match.id, s, vm)
+            0 -> MatchSummaryTab(currentMatch, s, vm)
+            1 -> MatchChatTab(currentMatch.id, s, vm)
         }
     }
 }
@@ -175,10 +178,17 @@ fun MatchSummaryTab(match: MatchResponse, s: UiState, vm: AppViewModel) {
             onDismiss = { showResultDialog = false },
             onConfirm = { sA, sB ->
                 val compId = s.currentCompetition?.id ?: 0L
+                val leagueId = s.currentLeague?.id ?: 0L
+                val rankingMode = s.currentCompetition?.rankingMode
+                
                 if (isPlayed) {
-                    vm.editMatchResult(compId, match.id, sA, sB)
+                    vm.editMatchResult(compId, match.id, sA, sB).invokeOnCompletion {
+                        if (compId != 0L) vm.refreshCompetitionData(leagueId, compId, rankingMode)
+                    }
                 } else {
-                    vm.updateMatchResult(compId, match.id, sA, sB)
+                    vm.updateMatchResult(compId, match.id, sA, sB).invokeOnCompletion {
+                        if (compId != 0L) vm.refreshCompetitionData(leagueId, compId, rankingMode)
+                    }
                 }
                 showResultDialog = false
             }

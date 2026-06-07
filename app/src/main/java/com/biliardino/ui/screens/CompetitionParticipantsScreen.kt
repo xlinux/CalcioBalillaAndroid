@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,6 +19,8 @@ import com.biliardino.model.CompetitionResponse
 import com.biliardino.model.LeagueMemberResponse
 import com.biliardino.model.LeagueResponse
 import com.biliardino.model.SeasonResponse
+import com.biliardino.model.TeamResponse
+import com.biliardino.ui.Screen
 import com.biliardino.viewmodel.AppViewModel
 import com.biliardino.viewmodel.UiState
 
@@ -29,8 +32,10 @@ fun CompetitionParticipantsScreen(
     s: UiState,
     vm: AppViewModel
 ) {
+    val isSingle = competition.matchType == "SINGLE"
     var showAddDialog by remember { mutableStateOf(false) }
     var participantToRemove by remember { mutableStateOf<LeagueMemberResponse?>(null) }
+    var teamToRemove by remember { mutableStateOf<TeamResponse?>(null) }
     
     val participantIds = remember(s.competitionPlayers) { s.competitionPlayers.map { it.userId }.toSet() }
     val availableMembers = remember(s.leagueMembers, participantIds) {
@@ -39,7 +44,9 @@ fun CompetitionParticipantsScreen(
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            if (s.competitionPlayers.isEmpty() && !s.loading) {
+            val isEmpty = if (isSingle) s.competitionPlayers.isEmpty() else s.seasonTeams.isEmpty()
+            
+            if (isEmpty && !s.loading) {
                 Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -47,7 +54,7 @@ fun CompetitionParticipantsScreen(
                         shape = MaterialTheme.shapes.extraLarge
                     ) {
                         Text(
-                            "Nessun partecipante iscritto a questa competizione.",
+                            if (isSingle) "Nessun partecipante iscritto a questa competizione." else "Nessuna squadra iscritta a questa competizione.",
                             modifier = Modifier.padding(32.dp).fillMaxWidth(),
                             textAlign = TextAlign.Center,
                             style = MaterialTheme.typography.bodyMedium,
@@ -63,17 +70,26 @@ fun CompetitionParticipantsScreen(
                 ) {
                     item {
                         Text(
-                            "Partecipanti Iscritti",
+                            if (isSingle) "Partecipanti Iscritti" else "Squadre Iscritte",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                     }
-                    items(s.competitionPlayers, key = { it.userId }) { participant ->
-                        ParticipantCard(
-                            participant = participant,
-                            onRemove = { participantToRemove = participant }
-                        )
+                    if (isSingle) {
+                        items(s.competitionPlayers, key = { it.userId }) { participant ->
+                            ParticipantCard(
+                                participant = participant,
+                                onRemove = { participantToRemove = participant }
+                            )
+                        }
+                    } else {
+                        items(s.seasonTeams, key = { it.id }) { team ->
+                            TeamListItemForManagement(
+                                team = team,
+                                onRemove = { teamToRemove = team }
+                            )
+                        }
                     }
                 }
             }
@@ -82,8 +98,12 @@ fun CompetitionParticipantsScreen(
         if ((s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER") && competition.registrationOpen) {
             FloatingActionButton(
                 onClick = {
-                    showAddDialog = true
-                    vm.loadLeagueMembersForParticipantPicker(league.id)
+                    if (isSingle) {
+                        showAddDialog = true
+                        vm.loadLeagueMembersForParticipantPicker(league.id)
+                    } else {
+                        vm.navigateTo(Screen.CreateTeam(league, season, competition))
+                    }
                 },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -91,12 +111,15 @@ fun CompetitionParticipantsScreen(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
             ) {
-                Icon(Icons.Default.PersonAdd, contentDescription = "Aggiungi Partecipante")
+                Icon(
+                    if (isSingle) Icons.Default.PersonAdd else Icons.Default.Groups, 
+                    contentDescription = if (isSingle) "Aggiungi Partecipante" else "Crea Squadra"
+                )
             }
         }
     }
 
-    if (showAddDialog) {
+    if (showAddDialog && isSingle) {
         AlertDialog(
             onDismissRequest = { showAddDialog = false },
             title = { Text("Aggiungi partecipante") },
@@ -163,6 +186,29 @@ fun CompetitionParticipantsScreen(
             }
         )
     }
+    teamToRemove?.let { team ->
+        AlertDialog(
+            onDismissRequest = { teamToRemove = null },
+            title = { Text("Rimuovere squadra?") },
+            text = { Text("Vuoi rimuovere la squadra ${team.name} da ${competition.name}? Questa operazione eliminerà anche eventuali risultati collegati.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        vm.deleteCompetitionTeam(competition.id, team.id)
+                        teamToRemove = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Rimuovi")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { teamToRemove = null }) {
+                    Text("Annulla")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -186,6 +232,37 @@ private fun ParticipantCard(participant: LeagueMemberResponse, onRemove: () -> U
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+            }
+            IconButton(onClick = onRemove) {
+                Icon(Icons.Default.Delete, contentDescription = "Rimuovi", tint = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TeamListItemForManagement(team: TeamResponse, onRemove: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(team.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                if (team.playerAUsername != null) {
+                    Text(
+                        "${team.playerAUsername}${if (team.playerBUsername != null) " & ${team.playerBUsername}" else ""}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
             IconButton(onClick = onRemove) {
                 Icon(Icons.Default.Delete, contentDescription = "Rimuovi", tint = MaterialTheme.colorScheme.error)

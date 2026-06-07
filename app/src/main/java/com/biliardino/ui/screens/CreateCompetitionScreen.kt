@@ -55,6 +55,7 @@ fun CreateCompetitionScreen(
     var calendarGenerationMode by remember { mutableStateOf("ROUNDS") }
     var selectedSportId by remember { mutableStateOf<Long?>(null) }
     var selectedTemplateSportId by remember { mutableStateOf<Long?>(null) }
+    var tournamentFormat by remember { mutableStateOf<String?>("GROUPS_THEN_SINGLE_ELIMINATION") }
     var joinCreator by remember { mutableStateOf(false) }
     var useTargetScore by remember { mutableStateOf(false) }
     var targetScore by remember { mutableStateOf(10) }
@@ -151,7 +152,7 @@ fun CreateCompetitionScreen(
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Nome campionato") },
+                label = { Text("Nome competizione") },
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.medium,
                 singleLine = true
@@ -171,14 +172,17 @@ fun CreateCompetitionScreen(
                 }
             )
 
-            SportPicker(
-                sports = s.sports,
-                selectedSportId = selectedSportId,
-                onSelected = {
-                    selectedSportId = it
-                    selectedTemplateSportId = null
-                }
-            )
+            if (selectedType == "CUP") {
+                OptionRow(
+                    label = "Formato Torneo",
+                    options = listOf(
+                        "SINGLE_ELIMINATION" to "Eliminazione Diretta",
+                        "GROUPS_THEN_SINGLE_ELIMINATION" to "Gironi + Eliminazione"
+                    ),
+                    selected = tournamentFormat ?: "GROUPS_THEN_SINGLE_ELIMINATION",
+                    onSelected = { tournamentFormat = it }
+                )
+            }
 
             CompetitionTemplatePicker(
                 templates = s.competitionTemplates,
@@ -186,6 +190,7 @@ fun CreateCompetitionScreen(
                 onSelected = { template ->
                     if (template == null) {
                         selectedTemplateSportId = null
+                        selectedSportId = null
                     } else {
                         applyTemplate(template)
                     }
@@ -423,7 +428,8 @@ fun CreateCompetitionScreen(
                     endDate = endDate,
                     joinCreator = joinCreator,
                     copyParticipants = copyParticipants,
-                    copyTeams = copyTeams
+                    copyTeams = copyTeams,
+                    tournamentFormat = if (selectedType == "CUP") tournamentFormat else null
                 )
             }
 
@@ -469,7 +475,8 @@ fun CreateCompetitionScreen(
                         winByTwo = winByTwo,
                         matchCreationMode = matchCreationMode,
                         calendarGenerationMode = finalCalendarMode,
-                        homeAndAway = homeAndAway
+                        homeAndAway = homeAndAway,
+                        tournamentFormat = if (selectedType == "CUP") tournamentFormat else null
                     )
                 )
             }
@@ -615,12 +622,16 @@ private fun CompetitionReview(
     endDate: String,
     joinCreator: Boolean,
     copyParticipants: Boolean,
-    copyTeams: Boolean
+    copyTeams: Boolean,
+    tournamentFormat: String? = null
 ) {
     CreationSectionCard("Riepilogo campionato") {
         ReviewLine("Nome", name)
         ReviewLine("Sport", sport)
         ReviewLine("Tipo", type.creationLabel())
+        if (type == "CUP" && tournamentFormat != null) {
+            ReviewLine("Formato Torneo", tournamentFormat.creationLabel())
+        }
         ReviewLine("Classifiche", rankingMode.creationLabel())
         ReviewLine("Tipo partita", matchType.creationLabel())
         ReviewLine("Ranking", rankingType.creationLabel())
@@ -678,6 +689,8 @@ private fun String.creationLabel(): String = when (this) {
     "WIN_RATE" -> "Percentuale vittorie"
     "SETS" -> "Set"
     "GOALS" -> "Gol"
+    "SINGLE_ELIMINATION" -> "Eliminazione Diretta"
+    "GROUPS_THEN_SINGLE_ELIMINATION" -> "Gironi + Eliminazione"
     else -> this
 }
 
@@ -724,54 +737,6 @@ private fun OptionRow(
                     onClick = { onSelected(value) },
                     label = { Text(title) }
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SportPicker(
-    sports: List<SportResponse>,
-    selectedSportId: Long?,
-    onSelected: (Long) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val selectedSport = sports.firstOrNull { it.id == selectedSportId }
-
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Sport", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-        if (sports.isEmpty()) {
-            Text(
-                "Nessuno sport disponibile",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        } else {
-            Box(Modifier.fillMaxWidth()) {
-                OutlinedButton(
-                    onClick = { expanded = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    Text(
-                        selectedSport?.name ?: "Seleziona sport",
-                        modifier = Modifier.weight(1f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Icon(Icons.Default.ChevronRight, contentDescription = null)
-                }
-                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    sports.filter { it.active }.forEach { sport ->
-                        DropdownMenuItem(
-                            text = { Text(sport.name) },
-                            onClick = {
-                                onSelected(sport.id)
-                                expanded = false
-                            }
-                        )
-                    }
-                }
             }
         }
     }

@@ -66,6 +66,9 @@ data class UiState(
     val matchComments: List<MatchCommentResponse> = emptyList(),
     val competitionComments: List<CompetitionCommentResponse> = emptyList(),
     val leagueComments: List<LeagueCommentResponse> = emptyList(),
+    val competitionGroups: List<CompetitionGroupResponse> = emptyList(),
+    val groupTeamRankings: Map<Long, List<TeamRankingResponse>> = emptyMap(),
+    val groupPlayerRankings: Map<Long, List<PlayerRankingResponse>> = emptyMap(),
     
     // Create League fields
     val newLeagueName: String = "",
@@ -80,7 +83,9 @@ data class UiState(
     val isBiometricEnabled: Boolean = false,
     val showBiometricSetupPrompt: Boolean = false,
     val hasSeenOnboarding: Boolean = false,
-    val theme: String = "SYSTEM" // "LIGHT", "DARK", "SYSTEM"
+    val theme: String = "SYSTEM", // "LIGHT", "DARK", "SYSTEM"
+    val currentCompetitionTab: Int = 0,
+    val currentCompetitionMode: String = "MAIN" // "MAIN", "MATCHES", "HISTORY"
 )
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -162,6 +167,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _state.value = _state.value.copy(error = null, successMessage = null)
     }
 
+    fun updateCompetitionTab(index: Int) {
+        _state.value = _state.value.copy(currentCompetitionTab = index)
+    }
+
+    fun updateCompetitionMode(mode: String) {
+        _state.value = _state.value.copy(currentCompetitionMode = mode)
+    }
+
     private fun handleSuccessfulLogin(auth: AuthResponse, customMessage: String? = null) {
         val jwt = auth.token ?: auth.jwt
         if (jwt != null) {
@@ -211,8 +224,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         val credentialManager = CredentialManager.create(activity)
         
-        // Per ottenere un idToken valido per il backend, DEVI usare il "Web Client ID"
-        // recuperato dalla console Google Cloud, NON l'Android Client ID.
+        // Per ottenere un idToken valido per le credenziali Google, DEVI usare il "Web Client ID"
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
             .setServerClientId("791240889172-v2g6jck0sj89j807khvs90n4cuato6eh.apps.googleusercontent.com")
@@ -316,6 +328,43 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             .onFailure { _state.value = _state.value.copy(loading = false, error = it.getErrorMessage()) }
     }
 
+    fun createLeague() = viewModelScope.launch {
+        val name = _state.value.newLeagueName
+        val description = _state.value.newLeagueDescription
+        val type = _state.value.newLeagueType
+        if (name.isBlank()) return@launch
+
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.leagues.createLeague(CreateLeagueRequest(name, description, type)) }
+            .onSuccess { 
+                _state.value = _state.value.copy(
+                    successMessage = "Lega creata con successo!", 
+                    loading = false,
+                    newLeagueName = "",
+                    newLeagueDescription = ""
+                )
+                loadMyLeagues()
+            }
+            .onFailure { _state.value = _state.value.copy(loading = false, error = it.getErrorMessage()) }
+    }
+
+    fun joinLeague() = viewModelScope.launch {
+        val code = _state.value.inviteCode
+        if (code.isBlank()) return@launch
+
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.leagues.joinLeague(JoinLeagueRequest(code)) }
+            .onSuccess { 
+                _state.value = _state.value.copy(
+                    successMessage = "Ti sei unito alla lega!", 
+                    loading = false,
+                    inviteCode = ""
+                )
+                loadMyLeagues()
+            }
+            .onFailure { _state.value = _state.value.copy(loading = false, error = it.getErrorMessage()) }
+    }
+
     fun selectLeague(league: LeagueResponse) = viewModelScope.launch {
         _state.value = _state.value.copy(currentLeague = league, loading = true, error = null, successMessage = null, currentUserRoleInLeague = null)
         runCatching {
@@ -364,6 +413,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             currentLeague = league,
             currentSeason = season,
             currentCompetition = competition,
+            currentCompetitionTab = 0,
+            currentCompetitionMode = "MAIN",
             currentScreen = Screen.CompetitionStatistics(league, season, competition)
         )
     }
@@ -373,17 +424,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val resolvedRankingMode = rankingMode ?: rankingModeForCompetition(competitionId)
         
         runCatching {
-            // 1. Carichiamo Classifiche
             val playersRank = if (resolvedRankingMode != "TEAM") ApiClientBase.competitions.getPlayerRankings(competitionId) else emptyList()
             val teamsRank = if (resolvedRankingMode != "PLAYER") ApiClientBase.competitions.getTeamRankings(competitionId) else emptyList()
-
-            // 2. Carichiamo Match
             val matches = ApiClientBase.competitions.getMatches(competitionId)
-
-            // 3. Carichiamo Squadre
             val teams = ApiClientBase.competitions.getCompetitionTeams(competitionId)
-
-            // 4. Carichiamo Partecipanti (e dati lega per arricchirli)
             val compPlayers = ApiClientBase.competitions.getCompetitionPlayers(competitionId)
             val leagueUsers = ApiClientBase.leagues.getLeagueUsers(leagueId)
 
@@ -403,7 +447,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
 
-            // Update State all at once
             _state.value = _state.value.copy(
                 playerRankings = playersRank,
                 teamRankings = teamsRank,
@@ -413,6 +456,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 seasonUsers = enrichedUsers,
                 loading = false
             )
+
+            if (_state.value.currentCompetition?.type == "TOURNAMENT") {
+                loadCompetitionGroups(competitionId)
+            }
         }.onFailure { e ->
             _state.value = _state.value.copy(loading = false, error = "Errore caricamento dati: ${e.getErrorMessage()}")
         }
@@ -471,16 +518,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val resolvedRankingMode = rankingMode ?: rankingModeForCompetition(competitionId)
         _state.value = _state.value.copy(loading = true, error = null)
         runCatching {
-            val players = if (resolvedRankingMode != "TEAM") {
-                ApiClientBase.competitions.getPlayerRankings(competitionId)
-            } else {
-                emptyList()
-            }
-            val teams = if (resolvedRankingMode != "PLAYER") {
-                ApiClientBase.competitions.getTeamRankings(competitionId)
-            } else {
-                emptyList()
-            }
+            val players = if (resolvedRankingMode != "TEAM") ApiClientBase.competitions.getPlayerRankings(competitionId) else emptyList()
+            val teams = if (resolvedRankingMode != "PLAYER") ApiClientBase.competitions.getTeamRankings(competitionId) else emptyList()
             players to teams
         }.onSuccess { (players, teams) ->
             _state.value = _state.value.copy(
@@ -537,6 +576,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
     }
 
+    fun loadCompetitionComments(competitionId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching { ApiClientBase.competitions.getCompetitionComments(competitionId) }
+            .onSuccess { comments ->
+                _state.value = _state.value.copy(competitionComments = comments, loading = false)
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore commenti competizione: ${e.getErrorMessage()}")
+            }
+    }
+
     fun addMatchComment(matchId: Long, message: String) = viewModelScope.launch {
         if (message.isBlank()) return@launch
         _state.value = _state.value.copy(loading = true, error = null)
@@ -547,17 +597,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             .onFailure { e ->
                 _state.value = _state.value.copy(loading = false, error = "Errore invio messaggio: ${e.getErrorMessage()}")
-            }
-    }
-
-    fun loadCompetitionComments(competitionId: Long) = viewModelScope.launch {
-        _state.value = _state.value.copy(loading = true, error = null)
-        runCatching { ApiClientBase.competitions.getCompetitionComments(competitionId) }
-            .onSuccess { comments ->
-                _state.value = _state.value.copy(competitionComments = comments, loading = false)
-            }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore commenti competizione: ${e.getErrorMessage()}")
             }
     }
 
@@ -572,6 +611,32 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             .onFailure { e ->
                 _state.value = _state.value.copy(loading = false, error = "Errore invio messaggio competizione: ${e.getErrorMessage()}")
             }
+    }
+
+    fun loadCompetitionGroups(competitionId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching { ApiClientBase.competitions.getCompetitionGroups(competitionId) }
+            .onSuccess { groups ->
+                _state.value = _state.value.copy(competitionGroups = groups, loading = false)
+                groups.forEach { group -> loadGroupRanking(competitionId, group.id) }
+            }
+            .onFailure { e ->
+                _state.value = _state.value.copy(loading = false, error = "Errore gironi: ${e.getErrorMessage()}")
+            }
+    }
+
+    fun loadGroupRanking(competitionId: Long, groupId: Long) = viewModelScope.launch {
+        runCatching {
+            val response = ApiClientBase.competitions.getGroupTeamRanking(competitionId, groupId)
+            
+            val teamRank = response.teamRanking ?: emptyList()
+            val playerRank = response.playerRanking ?: emptyList()
+
+            _state.value = _state.value.copy(
+                groupTeamRankings = _state.value.groupTeamRankings + (groupId to teamRank),
+                groupPlayerRankings = _state.value.groupPlayerRankings + (groupId to playerRank)
+            )
+        }
     }
 
     fun loadLeagueComments(leagueId: Long) = viewModelScope.launch {
@@ -609,10 +674,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _state.value = _state.value.copy(loading = true, error = null)
         runCatching { ApiClientBase.competitions.getMatches(competitionId) }
             .onSuccess { matches ->
-                _state.value = _state.value.copy(
-                    seasonMatches = matches,
-                    loading = false
-                )
+                _state.value = _state.value.copy(seasonMatches = matches, loading = false)
             }
             .onFailure { e ->
                 _state.value = _state.value.copy(loading = false, error = "Errore partite: ${e.getErrorMessage()}")
@@ -623,11 +685,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.competitions.joinCompetition(competitionId) }
             .onSuccess {
-                _state.value = _state.value.copy(
-                    successMessage = "Iscrizione completata con successo!",
-                    loading = false
-                )
-                // Refresh competitions list to update joined status
+                _state.value = _state.value.copy(successMessage = "Iscrizione completata con successo!", loading = false)
                 selectSeason(league, season)
             }
             .onFailure { e ->
@@ -638,43 +696,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun loadSeasonStatsData(leagueId: Long, seasonId: Long, competitionId: Long? = null) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null)
         runCatching {
-            val teams = if (competitionId != null) {
-                ApiClientBase.competitions.getCompetitionTeams(competitionId)
-            } else {
-                emptyList()
-            }
+            val teams = if (competitionId != null) ApiClientBase.competitions.getCompetitionTeams(competitionId) else emptyList()
             val users = if (competitionId != null) {
                 val compPlayers = ApiClientBase.competitions.getCompetitionPlayers(competitionId)
                 val leagueUsers = ApiClientBase.leagues.getLeagueUsers(leagueId)
                 compPlayers.map { player ->
                     val lu = leagueUsers.find { it.userId == player.userId }
                     LeagueUserResponse(
-                        userId = player.userId,
-                        username = player.username,
-                        email = player.email,
-                        rating = lu?.rating ?: 0,
-                        goalsFor = lu?.goalsFor ?: 0,
-                        goalsAgainst = lu?.goalsAgainst ?: 0,
-                        matchesPlayed = lu?.matchesPlayed ?: 0,
-                        cappottiGiven = lu?.cappottiGiven ?: 0,
-                        cappottiReceived = lu?.cappottiReceived ?: 0,
-                        role = player.role
+                        userId = player.userId, username = player.username, email = player.email,
+                        rating = lu?.rating ?: 0, goalsFor = lu?.goalsFor ?: 0, goalsAgainst = lu?.goalsAgainst ?: 0,
+                        matchesPlayed = lu?.matchesPlayed ?: 0, cappottiGiven = lu?.cappottiGiven ?: 0,
+                        cappottiReceived = lu?.cappottiReceived ?: 0, role = player.role
                     )
                 }
-            } else {
-                ApiClientBase.leagues.getLeagueUsers(leagueId)
-            }
+            } else ApiClientBase.leagues.getLeagueUsers(leagueId)
             teams to users
         }.onSuccess { (teams, users) ->
             val myUserId = _state.value.currentUser?.userId
             val myRoleInMembers = _state.value.leagueMembers.find { it.userId == myUserId }?.role
-            
-            _state.value = _state.value.copy(
-                seasonTeams = teams,
-                seasonUsers = users,
-                currentUserRoleInLeague = myRoleInMembers ?: _state.value.currentUserRoleInLeague,
-                loading = false
-            )
+            _state.value = _state.value.copy(seasonTeams = teams, seasonUsers = users, currentUserRoleInLeague = myRoleInMembers ?: _state.value.currentUserRoleInLeague, loading = false)
         }.onFailure { e ->
             _state.value = _state.value.copy(loading = false, error = "Errore caricamento dati: ${e.getErrorMessage()}")
         }
@@ -690,19 +730,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val members = ApiClientBase.competitions.getTeamMembers(teamId)
             
             _state.value = _state.value.copy(
-                currentTeamStats = stats,
-                currentTeamRatingHistory = history,
-                currentTeamMatches = teamMatches,
-                teamMembers = members,
-                currentCompetition = _state.value.currentCompetition,
-                currentLeague = _state.value.currentLeague,
-                currentSeason = _state.value.currentSeason,
-                currentScreen = Screen.TeamDetail(
-                    _state.value.currentLeague!!,
-                    _state.value.currentSeason!!,
-                    _state.value.currentCompetition!!,
-                    team
-                ),
+                currentTeamStats = stats, currentTeamRatingHistory = history, currentTeamMatches = teamMatches, teamMembers = members,
+                currentCompetition = _state.value.currentCompetition, currentLeague = _state.value.currentLeague, currentSeason = _state.value.currentSeason,
+                currentScreen = Screen.TeamDetail(_state.value.currentLeague!!, _state.value.currentSeason!!, _state.value.currentCompetition!!, team),
                 loading = false
             )
         }.onFailure { e ->
@@ -723,15 +753,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val stats = ApiClientBase.competitions.getPlayerStats(competitionId, userId)
             val history = ApiClientBase.competitions.getPlayerRatingHistory(competitionId, userId)
             val partners = ApiClientBase.competitions.getPlayerPartners(competitionId, userId)
-            // Note: If there's a getPlayerMatches(competitionId, userId) in the future, it should be called here.
             Triple(stats, history, partners)
         }.onSuccess { (stats, history, partners) ->
-            _state.value = _state.value.copy(
-                currentPlayerStats = stats,
-                currentPlayerRatingHistory = history,
-                currentPlayerPartners = partners,
-                loading = false
-            )
+            _state.value = _state.value.copy(currentPlayerStats = stats, currentPlayerRatingHistory = history, currentPlayerPartners = partners, loading = false)
         }.onFailure { e ->
             _state.value = _state.value.copy(loading = false, error = "Errore giocatore: ${e.getErrorMessage()}")
         }
@@ -740,259 +764,226 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun createSeason(leagueId: Long, request: CreateSeasonRequest) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.leagues.createSeason(leagueId, request) }
-            .onSuccess { 
-                _state.value = _state.value.copy(successMessage = "Stagione creata!")
-                // Refresh seasons list
-                selectLeague(_state.value.currentLeague!!)
-            }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore stagione: ${e.getErrorMessage()}")
-            }
+            .onSuccess { _state.value = _state.value.copy(successMessage = "Stagione creata!"); selectLeague(_state.value.currentLeague!!) }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore stagione: ${e.getErrorMessage()}") }
     }
 
     fun createCompetition(league: LeagueResponse, season: SeasonResponse, request: CreateCompetitionRequest) = viewModelScope.launch {
-        // Fail-safe: forza ROUNDS per campionati andata/ritorno
-        val finalRequest = if (request.type == "LEAGUE" && request.homeAndAway) {
-            request.copy(calendarGenerationMode = "ROUNDS")
-        } else {
-            request
-        }
-        
+        val finalRequest = if (request.type == "LEAGUE" && request.homeAndAway) request.copy(calendarGenerationMode = "ROUNDS") else request
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.leagues.createCompetition(season.id, finalRequest) }
-            .onSuccess {
-                _state.value = _state.value.copy(successMessage = "Competizione creata!")
-                selectSeason(league, season)
-            }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore competizione: ${e.getErrorMessage()}")
-            }
+            .onSuccess { _state.value = _state.value.copy(successMessage = "Competizione creata!"); selectSeason(league, season) }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore competizione: ${e.getErrorMessage()}") }
     }
 
     fun closeSeason(league: LeagueResponse, season: SeasonResponse) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.leagues.closeSeason(season.id) }
-            .onSuccess { updatedSeason ->
-                _state.value = _state.value.copy(
-                    successMessage = "Stagione chiusa con successo!",
-                    loading = false,
-                    currentSeason = updatedSeason
-                )
-                // Refresh list
-                selectLeague(league)
-            }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore chiusura: ${e.getErrorMessage()}")
-            }
+            .onSuccess { _state.value = _state.value.copy(successMessage = "Stagione chiusa con successo!", loading = false, currentSeason = it); selectLeague(league) }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore chiusura: ${e.getErrorMessage()}") }
     }
 
     fun closeCompetition(league: LeagueResponse, season: SeasonResponse, competition: CompetitionResponse) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.competitions.closeCompetition(competition.id) }
-            .onSuccess { updatedCompetition ->
-                _state.value = _state.value.copy(
-                    successMessage = "Competizione chiusa con successo!",
-                    loading = false,
-                    currentCompetition = updatedCompetition
-                )
-                // Refresh list to show updated status
-                selectSeason(league, season)
-            }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore chiusura competizione: ${e.getErrorMessage()}")
-            }
+            .onSuccess { _state.value = _state.value.copy(successMessage = "Competizione chiusa con successo!", loading = false, currentCompetition = it); selectSeason(league, season) }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore chiusura competizione: ${e.getErrorMessage()}") }
     }
 
     fun closeRegistration(league: LeagueResponse, season: SeasonResponse, competition: CompetitionResponse) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.competitions.closeRegistration(competition.id) }
             .onSuccess { updatedCompetition ->
-                _state.value = _state.value.copy(
-                    successMessage = "Iscrizioni chiuse con successo!",
-                    loading = false,
-                    currentCompetition = updatedCompetition
-                )
-                // Aggiorniamo anche la lista in UiState
-                val updatedList = _state.value.competitions.map { 
-                    if (it.id == updatedCompetition.id) updatedCompetition else it 
-                }
-                _state.value = _state.value.copy(competitions = updatedList)
+                val updatedList = _state.value.competitions.map { if (it.id == updatedCompetition.id) updatedCompetition else it }
+                _state.value = _state.value.copy(successMessage = "Iscrizioni chiuse con successo!", loading = false, currentCompetition = updatedCompetition, competitions = updatedList)
             }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore chiusura iscrizioni: ${e.getErrorMessage()}")
-            }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore chiusura iscrizioni: ${e.getErrorMessage()}") }
     }
 
     fun recalculateCompetition(competitionId: Long) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.competitions.recalculateCompetition(competitionId) }
-            .onSuccess {
-                _state.value = _state.value.copy(
-                    successMessage = "Ricalcolo punti completato!",
-                    loading = false
-                )
-                // Refresh rankings
-                loadRankings(competitionId)
-            }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore durante il ricalcolo: ${e.getErrorMessage()}")
-            }
+            .onSuccess { _state.value = _state.value.copy(successMessage = "Ricalcolo punti completato!", loading = false); loadRankings(competitionId) }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore durante il ricalcolo: ${e.getErrorMessage()}") }
     }
 
     fun generateCalendar(competitionId: Long) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.competitions.generateCalendar(competitionId) }
-            .onSuccess {
-                _state.value = _state.value.copy(
-                    successMessage = "Calendario generato con successo!",
-                    loading = false
-                )
-                // Refresh data
-                loadCompetitionMatches(competitionId)
-                loadRankings(competitionId)
-            }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore generazione calendario: ${e.getErrorMessage()}")
-            }
+            .onSuccess { _state.value = _state.value.copy(successMessage = "Calendario generato con successo!", loading = false); loadCompetitionMatches(competitionId); loadRankings(competitionId) }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore generazione calendario: ${e.getErrorMessage()}") }
     }
 
     fun generateBracket(competitionId: Long) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.competitions.generateBracket(competitionId) }
-            .onSuccess {
-                _state.value = _state.value.copy(
-                    successMessage = "Tabellone generato con successo!",
-                    loading = false
-                )
-                // Refresh data
-                loadCompetitionMatches(competitionId)
-                loadRankings(competitionId)
-            }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore generazione tabellone: ${e.getErrorMessage()}")
-            }
+            .onSuccess { _state.value = _state.value.copy(successMessage = "Tabellone generato con successo!", loading = false); loadCompetitionMatches(competitionId); loadRankings(competitionId) }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore generazione tabellone: ${e.getErrorMessage()}") }
     }
 
     fun deleteCompetition(league: LeagueResponse, season: SeasonResponse, competitionId: Long) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.competitions.deleteCompetition(competitionId) }
-            .onSuccess {
-                _state.value = _state.value.copy(
-                    successMessage = "Competizione eliminata",
-                    loading = false
-                )
-                // Torniamo alla lista competizioni e aggiorniamo
-                navigateTo(Screen.SeasonCompetitions(league, season))
-                selectSeason(league, season)
-            }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore eliminazione competizione: ${e.getErrorMessage()}")
-            }
+            .onSuccess { _state.value = _state.value.copy(successMessage = "Competizione eliminata", loading = false); navigateTo(Screen.SeasonCompetitions(league, season)); selectSeason(league, season) }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore eliminazione competizione: ${e.getErrorMessage()}") }
+    }
+
+    fun generateGroups(competitionId: Long, numberOfGroups: Int = 2) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.competitions.generateGroups(competitionId, GenerateGroupsRequest(numberOfGroups)) }
+            .onSuccess { _state.value = _state.value.copy(successMessage = "Gironi generati con successo!", loading = false); loadCompetitionGroups(competitionId) }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore generazione gironi: ${e.getErrorMessage()}") }
+    }
+
+    fun generateGroupsCalendar(competitionId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.competitions.generateGroupsCalendar(competitionId) }
+            .onSuccess { _state.value = _state.value.copy(successMessage = "Calendario gironi generato!", loading = false); loadCompetitionMatches(competitionId) }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore generazione calendario gironi: ${e.getErrorMessage()}") }
     }
 
     fun closeLeague(leagueId: Long) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.leagues.closeLeague(leagueId) }
-            .onSuccess {
+            .onSuccess { _state.value = _state.value.copy(successMessage = "Lega chiusa con successo!", loading = false, currentScreen = Screen.MyLeagues); loadMyLeagues() }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore chiusura lega: ${e.getErrorMessage()}") }
+    }
+
+    fun uploadLeagueCover(leagueId: Long, uri: Uri) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        try {
+            val inputStream: InputStream? = getApplication<Application>().contentResolver.openInputStream(uri)
+            val bytes = inputStream?.readBytes()
+            inputStream?.close()
+
+            if (bytes == null) {
+                _state.value = _state.value.copy(loading = false, error = "Impossibile leggere l'immagine")
+                return@launch
+            }
+
+            val requestFile = bytes.toRequestBody("image/*".toMediaTypeOrNull())
+            val body = MultipartBody.Part.createFormData("file", "cover.jpg", requestFile)
+
+            runCatching { ApiClientBase.leagues.uploadLeagueCover(leagueId, body) }
+                .onSuccess { updatedLeague ->
+                    _state.value = _state.value.copy(
+                        currentLeague = updatedLeague,
+                        successMessage = "Immagine caricata con successo!",
+                        loading = false
+                    )
+                    loadMyLeagues()
+                }
+                .onFailure { e ->
+                    _state.value = _state.value.copy(loading = false, error = "Errore caricamento: ${e.getErrorMessage()}")
+                }
+        } catch (e: Exception) {
+            _state.value = _state.value.copy(loading = false, error = "Errore: ${e.message}")
+        }
+    }
+
+    fun deleteLeagueCover(leagueId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.leagues.deleteLeagueCover(leagueId) }
+            .onSuccess { updatedLeague ->
                 _state.value = _state.value.copy(
-                    successMessage = "Lega chiusa con successo!",
-                    loading = false,
-                    currentScreen = Screen.MyLeagues
+                    currentLeague = updatedLeague,
+                    successMessage = "Immagine rimossa!",
+                    loading = false
                 )
                 loadMyLeagues()
             }
             .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore chiusura lega: ${e.getErrorMessage()}")
+                _state.value = _state.value.copy(loading = false, error = "Errore rimozione: ${e.getErrorMessage()}")
             }
     }
 
     fun updateMemberRole(leagueId: Long, userId: Long, role: String) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.leagues.updateMemberRole(leagueId, userId, UpdateLeagueMemberRoleRequest(role)) }
-            .onSuccess {
-                _state.value = _state.value.copy(
-                    successMessage = "Ruolo aggiornato con successo!",
-                    loading = false
-                )
-                _state.value.currentLeague?.let { selectLeague(it) }
-            }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore aggiornamento ruolo: ${e.getErrorMessage()}")
-            }
+            .onSuccess { _state.value = _state.value.copy(successMessage = "Ruolo aggiornato con successo!", loading = false); _state.value.currentLeague?.let { selectLeague(it) } }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore aggiornamento ruolo: ${e.getErrorMessage()}") }
     }
 
     fun createGuestPlayer(seasonId: Long, username: String, onCreated: (LeagueUserResponse) -> Unit) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.leagues.createGuestPlayer(seasonId, CreateGuestPlayerRequest(username)) }
             .onSuccess { user ->
-                _state.value = _state.value.copy(
-                    successMessage = "Giocatore Guest creato!",
-                    loading = false
-                )
-                // Refresh user list for the current UI context (stats or team creation)
+                _state.value = _state.value.copy(successMessage = "Giocatore Guest creato!", loading = false)
                 val currentLeague = _state.value.currentLeague
                 val currentSeason = _state.value.currentSeason
                 val currentCompetition = _state.value.currentCompetition
-                if (currentLeague != null && currentSeason != null) {
-                    loadSeasonStatsData(currentLeague.id, currentSeason.id, currentCompetition?.id)
-                }
+                if (currentLeague != null && currentSeason != null) loadSeasonStatsData(currentLeague.id, currentSeason.id, currentCompetition?.id)
                 onCreated(user)
             }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore creazione guest: ${e.getErrorMessage()}")
-            }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore creazione guest: ${e.getErrorMessage()}") }
     }
 
     fun createMatch(competitionId: Long, request: CreateDoubleMatchRequest) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.competitions.createMatch(competitionId, request) }
-            .onSuccess { 
-                _state.value = _state.value.copy(successMessage = "Partita registrata!")
+            .onSuccess { newMatch ->
+                _state.value = _state.value.copy(
+                    successMessage = "Partita registrata!", 
+                    loading = false,
+                    seasonMatches = _state.value.seasonMatches + newMatch
+                )
                 loadCompetitionMatches(competitionId)
                 loadRankings(competitionId)
             }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore partita: ${e.getErrorMessage()}")
-            }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore partita: ${e.getErrorMessage()}") }
     }
 
     fun deleteMatch(competitionId: Long, matchId: Long) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.competitions.deleteMatch(competitionId, matchId) }
-            .onSuccess {
-                _state.value = _state.value.copy(successMessage = "Partita eliminata!", loading = false)
-                loadCompetitionMatches(competitionId)
-                loadRankings(competitionId)
+            .onSuccess { _state.value = _state.value.copy(successMessage = "Partita eliminata!", loading = false); loadCompetitionMatches(competitionId); loadRankings(competitionId) }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore eliminazione partita: ${e.getErrorMessage()}") }
+    }
+
+    fun deleteCompetitionTeam(competitionId: Long, teamId: Long) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { ApiClientBase.competitions.deleteCompetitionTeam(competitionId, teamId) }
+            .onSuccess { 
+                _state.value = _state.value.copy(successMessage = "Squadra eliminata!", loading = false)
+                val currentLeague = _state.value.currentLeague
+                val currentSeason = _state.value.currentSeason
+                if (currentLeague != null && currentSeason != null) {
+                    loadSeasonStatsData(currentLeague.id, currentSeason.id, competitionId)
+                }
             }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore eliminazione partita: ${e.getErrorMessage()}")
-            }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore eliminazione squadra: ${e.getErrorMessage()}") }
     }
 
     fun updateMatchResult(competitionId: Long, matchId: Long, scoreA: Int, scoreB: Int) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.matches.updateMatchResult(matchId, UpdateMatchResultRequest(scoreA, scoreB)) }
-            .onSuccess {
-                _state.value = _state.value.copy(successMessage = "Risultato aggiornato!", loading = false)
+            .onSuccess { updatedMatch ->
+                val updatedList = _state.value.seasonMatches.map { if (it.id == updatedMatch.id) updatedMatch else it }
+                _state.value = _state.value.copy(
+                    successMessage = "Risultato aggiornato!", 
+                    loading = false,
+                    seasonMatches = updatedList
+                )
                 loadCompetitionMatches(competitionId)
                 loadRankings(competitionId)
             }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore aggiornamento risultato: ${e.getErrorMessage()}")
-            }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore aggiornamento risultato: ${e.getErrorMessage()}") }
     }
 
     fun editMatchResult(competitionId: Long, matchId: Long, scoreA: Int, scoreB: Int) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
         runCatching { ApiClientBase.matches.editMatchResult(matchId, UpdateMatchResultRequest(scoreA, scoreB)) }
-            .onSuccess {
-                _state.value = _state.value.copy(successMessage = "Risultato modificato!", loading = false)
+            .onSuccess { updatedMatch ->
+                val updatedList = _state.value.seasonMatches.map { if (it.id == updatedMatch.id) updatedMatch else it }
+                _state.value = _state.value.copy(
+                    successMessage = "Risultato modificato!", 
+                    loading = false,
+                    seasonMatches = updatedList
+                )
                 loadCompetitionMatches(competitionId)
                 loadRankings(competitionId)
             }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore modifica risultato: ${e.getErrorMessage()}")
-            }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore modifica risultato: ${e.getErrorMessage()}") }
     }
 
     fun createTeam(competitionId: Long, request: CreateTeamRequest, onSuccess: (() -> Unit)? = null) = viewModelScope.launch {
@@ -1002,25 +993,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 _state.value = _state.value.copy(successMessage = "Squadra creata!")
                 val currentLeague = _state.value.currentLeague
                 val currentSeason = _state.value.currentSeason
-                if (currentLeague != null && currentSeason != null) {
-                    loadSeasonStatsData(currentLeague.id, currentSeason.id, competitionId)
-                }
+                if (currentLeague != null && currentSeason != null) loadSeasonStatsData(currentLeague.id, currentSeason.id, competitionId)
                 onSuccess?.invoke()
             }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore squadra: ${e.getErrorMessage()}")
-            }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore squadra: ${e.getErrorMessage()}") }
     }
 
     fun loadTeamMembers(teamId: Long) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null)
         runCatching { ApiClientBase.competitions.getTeamMembers(teamId) }
-            .onSuccess { members ->
-                _state.value = _state.value.copy(teamMembers = members, loading = false)
-            }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore membri squadra: ${e.getErrorMessage()}")
-            }
+            .onSuccess { _state.value = _state.value.copy(teamMembers = it, loading = false) }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore membri squadra: ${e.getErrorMessage()}") }
     }
 
     fun joinTeam(inviteCode: String) = viewModelScope.launch {
@@ -1031,98 +1014,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val comp = _state.value.currentCompetition
                 val league = _state.value.currentLeague
                 val season = _state.value.currentSeason
-                if (comp != null && league != null && season != null) {
-                    selectCompetition(league, season, comp)
-                }
+                if (comp != null && league != null && season != null) selectCompetition(league, season, comp)
             }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore ingresso squadra: ${e.getErrorMessage()}")
-            }
-    }
-
-    fun createLeague() = viewModelScope.launch {
-        val s = _state.value
-        if (s.newLeagueName.isBlank()) {
-            _state.value = s.copy(error = "Il nome è obbligatorio")
-            return@launch
-        }
-        _state.value = s.copy(loading = true, error = null, successMessage = null)
-        runCatching { 
-            ApiClientBase.leagues.createLeague(CreateLeagueRequest(s.newLeagueName, s.newLeagueDescription, s.newLeagueType))
-        }.onSuccess { league -> 
-            val typeText = if (s.newLeagueType == "CLUB") "Circolo" else "Lega"
-            _state.value = _state.value.copy(
-                loading = false,
-                successMessage = "$typeText creata con successo!",
-                newLeagueName = "",
-                newLeagueDescription = ""
-            )
-            selectLeague(league)
-            loadMyLeagues()
-        }.onFailure { e ->
-            _state.value = _state.value.copy(loading = false, error = "Errore creazione: ${e.getErrorMessage()}")
-        }
-    }
-
-    fun uploadLeagueCover(leagueId: Long, uri: Uri) = viewModelScope.launch {
-        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
-        runCatching {
-            val inputStream: InputStream? = getApplication<Application>().contentResolver.openInputStream(uri)
-            val bytes = inputStream?.readBytes() ?: throw Exception("Impossibile leggere il file")
-            val requestFile = bytes.toRequestBody("image/*".toMediaTypeOrNull())
-            val body = MultipartBody.Part.createFormData("file", "cover.jpg", requestFile)
-            
-            ApiClientBase.leagues.uploadLeagueCover(leagueId, body)
-        }.onSuccess { league ->
-            _state.value = _state.value.copy(
-                loading = false,
-                successMessage = "Immagine caricata con successo!",
-                currentLeague = league
-            )
-            // Se necessario ricarichiamo le altre liste
-            loadMyLeagues()
-        }.onFailure { e ->
-            _state.value = _state.value.copy(loading = false, error = "Errore caricamento immagine: ${e.getErrorMessage()}")
-        }
-    }
-
-    fun deleteLeagueCover(leagueId: Long) = viewModelScope.launch {
-        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
-        runCatching { ApiClientBase.leagues.deleteLeagueCover(leagueId) }
-            .onSuccess { league ->
-                _state.value = _state.value.copy(
-                    loading = false,
-                    successMessage = "Immagine rimossa!",
-                    currentLeague = league
-                )
-                loadMyLeagues()
-            }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore rimozione immagine: ${e.getErrorMessage()}")
-            }
-    }
-
-    fun joinLeague(code: String? = null) = viewModelScope.launch {
-        val s = _state.value
-        val finalCode = code ?: s.inviteCode
-        if (finalCode.isBlank()) {
-            _state.value = s.copy(error = "Il codice di invito è obbligatorio")
-            return@launch
-        }
-        _state.value = s.copy(loading = true, error = null, successMessage = null)
-        runCatching {
-            ApiClientBase.leagues.joinLeague(JoinLeagueRequest(finalCode))
-        }.onSuccess { league ->
-            _state.value = _state.value.copy(
-                loading = false,
-                successMessage = "Ti sei unito alla lega!",
-                inviteCode = ""
-            )
-            selectLeague(league)
-            loadMyLeagues()
-        }.onFailure { e ->
-            _state.value = _state.value.copy(loading = false, error = "Errore durante l'accesso alla lega: ${e.getErrorMessage()}")
-        }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore ingresso squadra: ${e.getErrorMessage()}") }
     }
 
     fun loadCurrentUser() = viewModelScope.launch {
@@ -1130,17 +1024,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         runCatching { ApiClientBase.userSettings.getMe() }
             .onSuccess { me ->
                 val currentAuth = _state.value.currentUser
-                _state.value = _state.value.copy(
-                    currentUser = AuthResponse(
-                        jwt = currentAuth?.jwt,
-                        refreshToken = currentAuth?.refreshToken,
-                        userId = me.id,
-                        name = me.username ?: "Utente",
-                        email = me.email,
-                        authProvider = "GOOGLE"
-                    ),
-                    loading = false
-                )
+                _state.value = _state.value.copy(currentUser = AuthResponse(jwt = currentAuth?.jwt, refreshToken = currentAuth?.refreshToken, userId = me.id, name = me.username ?: "Utente", email = me.email, authProvider = "GOOGLE"), loading = false)
             }
             .onFailure { e ->
                 _state.value = _state.value.copy(loading = false, error = "Impossibile caricare il profilo")
@@ -1153,35 +1037,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         runCatching { ApiClientBase.userSettings.updateProfile(UpdateProfileRequest(username = name)) }
             .onSuccess { me ->
                 val currentAuth = _state.value.currentUser
-                _state.value = _state.value.copy(
-                    currentUser = AuthResponse(
-                        jwt = currentAuth?.jwt,
-                        refreshToken = currentAuth?.refreshToken,
-                        userId = me.id,
-                        name = me.username ?: "Utente",
-                        email = me.email,
-                        authProvider = "GOOGLE"
-                    ),
-                    loading = false,
-                    successMessage = "Profilo aggiornato con successo!"
-                )
+                _state.value = _state.value.copy(currentUser = AuthResponse(jwt = currentAuth?.jwt, refreshToken = currentAuth?.refreshToken, userId = me.id, name = me.username ?: "Utente", email = me.email, authProvider = "GOOGLE"), loading = false, successMessage = "Profilo aggiornato con successo!")
             }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore aggiornamento profilo: ${e.getErrorMessage()}")
-            }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore aggiornamento profilo: ${e.getErrorMessage()}") }
     }
 
     fun logout() = viewModelScope.launch {
         val canBio = _state.value.canUseBiometrics
         val bioEnabled = _state.value.isBiometricEnabled
-        if (!bioEnabled) {
-            sessionManager.clearSession()
-        }
+        if (!bioEnabled) sessionManager.clearSession()
         ApiClientBase.authToken = null
-        _state.value = UiState(currentScreen = Screen.PublicLeagues).copy(
-            canUseBiometrics = canBio,
-            isBiometricEnabled = bioEnabled
-        )
+        _state.value = UiState(currentScreen = Screen.PublicLeagues).copy(canUseBiometrics = canBio, isBiometricEnabled = bioEnabled)
         loadPublicLeagues()
     }
 
@@ -1190,11 +1056,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         sessionManager.clearSession()
         sessionManager.setBiometricEnabled(false)
         ApiClientBase.authToken = null
-        _state.value = UiState(currentScreen = Screen.PublicLeagues).copy(
-            canUseBiometrics = canBio,
-            isBiometricEnabled = false,
-            error = "Sessione scaduta, effettua nuovamente l'accesso con Google"
-        )
+        _state.value = UiState(currentScreen = Screen.PublicLeagues).copy(canUseBiometrics = canBio, isBiometricEnabled = false, error = "Sessione scaduta, effettua nuovamente l'accesso con Google")
         loadPublicLeagues()
     }
 
@@ -1206,17 +1068,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 sessionManager.clearSession()
                 sessionManager.setBiometricEnabled(false)
                 ApiClientBase.authToken = null
-                _state.value = UiState(currentScreen = Screen.PublicLeagues).copy(
-                    canUseBiometrics = canBio,
-                    isBiometricEnabled = false,
-                    successMessage = "Account eliminato",
-                    loading = false
-                )
+                _state.value = UiState(currentScreen = Screen.PublicLeagues).copy(canUseBiometrics = canBio, isBiometricEnabled = false, successMessage = "Account eliminato", loading = false)
                 loadPublicLeagues()
             }
-            .onFailure { e ->
-                _state.value = _state.value.copy(loading = false, error = "Errore eliminazione account: ${e.getErrorMessage()}")
-            }
+            .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore eliminazione account: ${e.getErrorMessage()}") }
     }
 
     fun showBiometricPrompt(activity: FragmentActivity) {
@@ -1229,26 +1084,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                 super.onAuthenticationError(errorCode, errString)
                 _state.value = _state.value.copy(error = errString.toString())
-                // If biometric fails, we should probably go to PublicLeagues or AuthMenu
-                if (_state.value.currentScreen == Screen.Splash) {
-                    _state.value = _state.value.copy(currentScreen = Screen.PublicLeagues)
-                }
+                if (_state.value.currentScreen == Screen.Splash) _state.value = _state.value.copy(currentScreen = Screen.PublicLeagues)
             }
         })
-
-        val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Autenticazione")
-            .setSubtitle("Usa la biometria per accedere")
-            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
-            .build()
-
+        val promptInfo = BiometricPrompt.PromptInfo.Builder().setTitle("Autenticazione").setSubtitle("Usa la biometria per accedere").setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL).build()
         biometricPrompt.authenticate(promptInfo)
     }
 
     private fun handleBiometricSuccess() = viewModelScope.launch {
         val token = sessionManager.authToken.first()
         val refreshToken = sessionManager.refreshToken.first()
-        
         if (token != null && refreshToken != null) {
             ApiClientBase.authToken = token
             loadCurrentUser()
@@ -1256,18 +1101,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             loadMyLeagues()
         } else {
             sessionManager.setBiometricEnabled(false)
-            _state.value = _state.value.copy(
-                currentScreen = Screen.PublicLeagues,
-                isBiometricEnabled = false,
-                error = "Sessione scaduta, effettua nuovamente l'accesso con Google"
-            )
+            _state.value = _state.value.copy(currentScreen = Screen.PublicLeagues, isBiometricEnabled = false, error = "Sessione scaduta, effettua nuovamente l'accesso con Google")
         }
     }
 
     private fun Throwable.getErrorMessage(): String {
-        val errorMsg = if (this is HttpException) {
+        return if (this is HttpException) {
             val code = code()
-            Log.w("AppViewModel", "HTTP Error $code: ${message()}")
             try {
                 val errorBody = response()?.errorBody()?.string()
                 if (!errorBody.isNullOrBlank()) {
@@ -1275,28 +1115,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     if (trimmedBody.startsWith("{")) {
                         try {
                             val json = Json { ignoreUnknownKeys = true }.parseToJsonElement(trimmedBody).jsonObject
-                            json["message"]?.jsonPrimitive?.content
-                                ?: json["error"]?.jsonPrimitive?.content
-                                ?: "Errore $code: $trimmedBody"
-                        } catch (e: Exception) {
-                            "Errore $code: $trimmedBody"
-                        }
-                    } else {
-                        // Se non è un JSON, mostra il testo puro (spesso il backend manda stringhe semplici per gli errori)
-                        "Errore: $trimmedBody"
-                    }
-                } else {
-                    "Errore del server ($code)"
-                }
-            } catch (_: Exception) {
-                "Errore di rete ($code)"
-            }
-        } else {
-            Log.e("AppViewModel", "getErrorMessage triggered for: ${this.javaClass.simpleName}", this)
-            message ?: "Errore sconosciuto"
-        }
-
-        Log.w("AppViewModel", "Final error message to display: $errorMsg")
-        return errorMsg
+                            json["message"]?.jsonPrimitive?.content ?: json["error"]?.jsonPrimitive?.content ?: "Errore $code: $trimmedBody"
+                        } catch (e: Exception) { "Errore $code: $trimmedBody" }
+                    } else "Errore: $trimmedBody"
+                } else "Errore del server ($code)"
+            } catch (_: Exception) { "Errore di rete ($code)" }
+        } else message ?: "Errore sconosciuto"
     }
 }

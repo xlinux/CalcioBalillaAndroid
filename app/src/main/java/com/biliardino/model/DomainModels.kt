@@ -140,9 +140,31 @@ data class CompetitionResponse(
     val matchCreationMode: String = "FREE",
     val calendarGenerationMode: String = "ROUNDS",
     val registrationOpen: Boolean = true,
+    val tournamentFormat: String? = null, // SINGLE_ELIMINATION, GROUPS_THEN_SINGLE_ELIMINATION
     val winnerTeamId: Long? = null,
     val winnerUserId: Long? = null,
     val closedAt: String? = null
+)
+
+@Serializable
+data class GenerateGroupsRequest(
+    val numberOfGroups: Int
+)
+
+@Serializable
+data class CompetitionGroupResponse(
+    val id: Long,
+    val name: String,
+    val sortOrder: Int
+)
+
+@Serializable
+data class GroupRankingResponse(
+    val groupId: Long,
+    val groupName: String,
+    val rankingMode: String,
+    val teamRanking: List<TeamRankingResponse>? = null,
+    val playerRanking: List<PlayerRankingResponse>? = null
 )
 
 @Serializable
@@ -179,7 +201,8 @@ data class CreateCompetitionRequest(
     val winByTwo: Boolean = false,
     val matchCreationMode: String = "FREE",
     val calendarGenerationMode: String = "ROUNDS",
-    val homeAndAway: Boolean = false
+    val homeAndAway: Boolean = false,
+    val tournamentFormat: String? = null // SINGLE_ELIMINATION, GROUPS_THEN_SINGLE_ELIMINATION
 )
 
 @Serializable
@@ -268,6 +291,7 @@ data class JoinTeamResponse(
 data class MatchResponse( // Renamed from Match
     val id: Long,
     val seasonId: Long? = null,
+    val competitionId: Long? = null,
     val type: String? = null,
     val teamAId: Long? = null,
     val teamAName: String? = null,
@@ -289,6 +313,9 @@ data class MatchResponse( // Renamed from Match
     val bracketPosition: Int? = null,
     val nextMatchId: Long? = null,
     val nextMatchSlot: String? = null,
+    val groupId: Long? = null,
+    val groupName: String? = null,
+    val knockoutStage: Boolean = false,
     val resultInsertable: Boolean = true
 )
 

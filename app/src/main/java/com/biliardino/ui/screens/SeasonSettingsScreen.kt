@@ -28,7 +28,12 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
 
     LaunchedEffect(Unit) {
         vm.loadSeasonStatsData(league.id, season.id, competition?.id)
-        competition?.id?.let { vm.loadCompetitionMatches(it) }
+        competition?.id?.let { 
+            vm.loadCompetitionMatches(it)
+            if (competition.type == "TOURNAMENT") {
+                vm.loadCompetitionGroups(it)
+            }
+        }
     }
 
     Column(
@@ -155,32 +160,64 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                     buttonText = "GESTISCI",
                     onClick = {
                         vm.navigateTo(Screen.CompetitionParticipants(league, season, competition))
-                        vm.loadCompetitionPlayers(competition.id)
+                        if (competition.matchType == "SINGLE") {
+                            vm.loadCompetitionPlayers(competition.id)
+                        } else {
+                            vm.loadSeasonStatsData(league.id, season.id, competition.id)
+                        }
                     },
                     color = MaterialTheme.colorScheme.secondary
                 )
 
-                if (competition.matchCreationMode == "SCHEDULED" && competition.type == "LEAGUE") {
-                    val canGenerate = competition.active != false &&
-                            s.seasonTeams.size >= 2 &&
-                            s.seasonMatches.isEmpty()
-                    
-                    AdminActionCard(
-                        title = "Generazione Calendario",
-                        description = "Crea automaticamente tutti gli incontri basandoti sulle squadre iscritte. Questa operazione richiede almeno 2 squadre.",
-                        buttonText = "GENERA CALENDARIO",
-                        onClick = { showGenerateDialog = true },
-                        enabled = canGenerate,
-                        statusText = if (s.seasonMatches.isNotEmpty()) "Calendario già generato." else if (s.seasonTeams.size < 2) "Servono almeno 2 squadre." else null
-                    )
-                }
+                // Generation Logic
+                val competitionMatches = s.seasonMatches.filter { it.competitionId == competition.id }
+                val hasGroups = s.competitionGroups.isNotEmpty()
+                val hasMatches = competitionMatches.isNotEmpty()
+                val allMatchesFinished = hasMatches &&
+                        competitionMatches.all { it.scoreA != null && it.scoreB != null }
 
-                if (competition.type == "CUP") {
+                if (competition.type == "TOURNAMENT" && competition.tournamentFormat == "GROUPS_THEN_SINGLE_ELIMINATION") {
+                    // Sequence: Groups -> Group Matches -> Final Stage
+                    if (!hasGroups) {
+                        AdminActionCard(
+                            title = "Generazione Gironi",
+                            description = "Crea i gironi della competizione distribuendo le squadre iscritte.",
+                            buttonText = "GENERA GIRONI",
+                            onClick = { vm.generateGroups(competition.id, 2) },
+                            enabled = (if (competition.matchType == "SINGLE") s.competitionPlayers.size else s.seasonTeams.size) >= 2
+                        )
+                    } else if (!hasMatches) {
+                        AdminActionCard(
+                            title = "Calendario Gironi",
+                            description = "Genera tutte le partite per i gironi creati.",
+                            buttonText = "GENERA CALENDARIO GIRONI",
+                            onClick = { vm.generateGroupsCalendar(competition.id) }
+                        )
+                    } else if (allMatchesFinished) {
+                        AdminActionCard(
+                            title = "Fase Finale",
+                            description = "Tutte le partite dei gironi sono concluse. Genera il tabellone della fase finale.",
+                            buttonText = "GENERA FASE FINALE",
+                            onClick = { vm.generateBracket(competition.id) },
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        AdminActionCard(
+                            title = "Stato Gironi",
+                            description = "I gironi sono in corso. Completa tutte le partite per generare la fase finale.",
+                            buttonText = "IN CORSO",
+                            onClick = { },
+                            enabled = false,
+                            statusText = "${s.seasonMatches.count { it.scoreA != null }} / ${s.seasonMatches.size} partite concluse"
+                        )
+                    }
+                } else if (competition.type == "CUP" || (competition.type == "TOURNAMENT" && competition.tournamentFormat == "SINGLE_ELIMINATION")) {
+                    // Sequence: Direct Bracket (Quarti/Tabellone)
                     val validEntryCounts = listOf(4, 8, 16, 32)
-                    val teamsCount = s.seasonTeams.size
+                    val entriesCount = if (competition.matchType == "SINGLE") s.competitionPlayers.size else s.seasonTeams.size
                     val canGenerateBracket = competition.active != false &&
-                            teamsCount in validEntryCounts &&
-                            s.seasonMatches.isEmpty()
+                            entriesCount in validEntryCounts &&
+                            !hasMatches
 
                     var showGenerateBracketDialog by remember { mutableStateOf(false) }
 
@@ -190,13 +227,14 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                         buttonText = "GENERA TABELLONE",
                         onClick = { showGenerateBracketDialog = true },
                         enabled = canGenerateBracket,
-                        statusText = if (s.seasonMatches.isNotEmpty()) "Tabellone già generato." else null
+                        statusText = if (hasMatches) "Tabellone già generato." else null
                     )
 
                     CupValidationSection(
-                        teams = s.seasonTeams,
+                        entriesCount = entriesCount,
                         validCounts = validEntryCounts,
-                        isAlreadyGenerated = s.seasonMatches.isNotEmpty()
+                        isAlreadyGenerated = hasMatches,
+                        entryNames = if (competition.matchType == "SINGLE") s.competitionPlayers.map { it.username } else s.seasonTeams.map { it.name }
                     )
 
                     if (showGenerateBracketDialog) {
@@ -219,6 +257,20 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                             }
                         )
                     }
+                } else if (competition.matchCreationMode == "SCHEDULED" && competition.type == "LEAGUE") {
+                    // Sequence: League Calendar
+                    val canGenerate = competition.active != false &&
+                            s.seasonTeams.size >= 2 &&
+                            !hasMatches
+                    
+                    AdminActionCard(
+                        title = "Generazione Calendario",
+                        description = "Crea automaticamente tutti gli incontri basandoti sulle squadre iscritte. Questa operazione richiede almeno 2 squadre.",
+                        buttonText = "GENERA CALENDARIO",
+                        onClick = { showGenerateDialog = true },
+                        enabled = canGenerate,
+                        statusText = if (hasMatches) "Calendario già generato." else if (s.seasonTeams.size < 2) "Servono almeno 2 squadre." else null
+                    )
                 }
 
                 if (competition.status == "ACTIVE" || competition.status == null) {
@@ -232,13 +284,15 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                         )
                     }
 
-                    AdminActionCard(
-                        title = "Manutenzione Punteggi",
-                        description = "Ricalcola tutti i punti della classifica basandoti sullo storico dei match. Utile in caso di anomalie nei punteggi.",
-                        buttonText = "RICALCOLA PUNTI",
-                        onClick = { vm.recalculateCompetition(competition.id) },
-                        color = MaterialTheme.colorScheme.tertiary
-                    )
+                    if (competition.type != "TOURNAMENT" || competition.tournamentFormat != "GROUPS_THEN_SINGLE_ELIMINATION" || s.seasonMatches.isNotEmpty()) {
+                        AdminActionCard(
+                            title = "Manutenzione Punteggi",
+                            description = "Ricalcola tutti i punti della classifica basandoti sullo storico dei match. Utile in caso di anomalie nei punteggi.",
+                            buttonText = "RICALCOLA PUNTI",
+                            onClick = { vm.recalculateCompetition(competition.id) },
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
 
                     AdminActionCard(
                         title = "Termina Competizione",
@@ -389,14 +443,14 @@ private fun WinnerCard(
 
 @Composable
 fun CupValidationSection(
-    teams: List<com.biliardino.model.TeamResponse>,
+    entriesCount: Int,
     validCounts: List<Int>,
-    isAlreadyGenerated: Boolean
+    isAlreadyGenerated: Boolean,
+    entryNames: List<String> = emptyList()
 ) {
     if (isAlreadyGenerated) return
 
-    val teamsCount = teams.size
-    val isValid = teamsCount in validCounts
+    val isValid = entriesCount in validCounts
 
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
@@ -406,15 +460,15 @@ fun CupValidationSection(
         )
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            // 1. Numero squadre iscritte
+            // 1. Numero entries iscritte
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "Squadre iscritte: ",
+                    text = "Partecipanti iscritti: ",
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "$teamsCount",
+                    text = "$entriesCount",
                     style = MaterialTheme.typography.bodyLarge,
                     color = if (isValid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.ExtraBold
@@ -453,15 +507,15 @@ fun CupValidationSection(
                             Text("⚠️", modifier = Modifier.padding(top = 2.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                "Numero non valido per una coppa a eliminazione diretta. Sono supportati: ${validCounts.joinToString(", ")} squadre.",
+                                "Numero non valido per una coppa a eliminazione diretta. Sono supportati: ${validCounts.joinToString(", ")} partecipanti.",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
                         }
                     }
 
-                    val nextValid = validCounts.firstOrNull { it > teamsCount }
-                    val prevValid = validCounts.lastOrNull { it < teamsCount }
+                    val nextValid = validCounts.firstOrNull { it > entriesCount }
+                    val prevValid = validCounts.lastOrNull { it < entriesCount }
 
                     if (nextValid != null || prevValid != null) {
                         Text(
@@ -472,13 +526,13 @@ fun CupValidationSection(
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             prevValid?.let {
                                 Text(
-                                    "• rimuovere ${teamsCount - it} squadre per arrivare a $it",
+                                    "• rimuovere ${entriesCount - it} partecipanti per arrivare a $it",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
                             nextValid?.let {
                                 Text(
-                                    "• aggiungere ${it - teamsCount} squadre per arrivare a $it",
+                                    "• aggiungere ${it - entriesCount} partecipanti per arrivare a $it",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
@@ -487,18 +541,18 @@ fun CupValidationSection(
                 }
             }
 
-            // 3. Elenco squadre partecipanti
-            if (teams.isNotEmpty()) {
+            // 3. Elenco partecipanti
+            if (entryNames.isNotEmpty()) {
                 HorizontalDivider(thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
                 Text(
-                    "Squadre partecipanti:",
+                    "Iscritti:",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    teams.forEach { team ->
+                    entryNames.forEach { name ->
                         Text(
-                            "• ${team.name}",
+                            "• $name",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

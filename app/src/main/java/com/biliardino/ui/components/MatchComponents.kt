@@ -44,87 +44,126 @@ fun MatchList(
     onMatchClick: ((MatchResponse) -> Unit)? = null,
     isCompetitionActive: Boolean = true
 ) {
-    val isLeague = competitionType == "LEAGUE"
-    val isRounds = calendarGenerationMode == "ROUNDS" || isLeague
-
-    val groupedMatches = remember(matches, isLeague, isRounds) {
-        if (isRounds) {
-            matches.sortedWith(
-                compareBy<MatchResponse> { it.roundNumber ?: Int.MAX_VALUE }
-                    .thenBy { it.playedAt ?: "" }
-                    .thenBy { it.id }
-            ).groupBy { match ->
-                if (isLeague) {
-                    match.roundNumber?.let { "Giornata $it" } ?: "Altre partite"
-                } else {
-                    match.roundNumber?.let { round ->
-                        when (round) {
-                            1 -> "Finale"
-                            2 -> "Semifinali"
-                            4 -> "Quarti"
-                            8 -> "Ottavi"
-                            16 -> "Sedicesimi"
-                            else -> "Turno $round"
-                        }
-                    } ?: "Altre partite"
-                }
-            }
-        } else {
-            matches.sortedByDescending { it.playedAt ?: "" }
-                .groupBy { match ->
-                    match.playedAt?.let {
-                        try {
-                            val dt = LocalDateTime.parse(it.substring(0, 19))
-                            val date = dt.toLocalDate()
-                            val today = LocalDate.now()
-                            val yesterday = today.minusDays(1)
-                            val dateFormatted = date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
-                            
-                            when (date) {
-                                today -> "OGGI ($dateFormatted)"
-                                yesterday -> "IERI ($dateFormatted)"
-                                else -> dateFormatted
-                            }
-                        } catch (e: Exception) {
-                            "Altre"
-                        }
-                    } ?: "Da giocare"
-                }
-        }
-    }
+    val groupedMatches = groupMatchesByHeader(matches, calendarGenerationMode, competitionType)
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        groupedMatches.forEach { (header, matchesInGroup) ->
-            stickyHeader {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
-                ) {
-                    Text(
-                        text = header.uppercase(),
-                        modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = 1.sp
-                    )
-                }
-            }
-            items(matchesInGroup) { match ->
-                MatchItem(
-                    match = match,
-                    teams = teams,
-                    isAdmin = isAdmin,
-                    rankingType = rankingType,
-                    onDeleteMatch = onDeleteMatch,
-                    onUpdateResult = onUpdateResult,
-                    onEditResult = onEditResult,
-                    onMatchClick = onMatchClick,
-                    competitionType = competitionType,
-                    isCompetitionActive = isCompetitionActive
+        MatchesContent(
+            groupedMatches = groupedMatches,
+            teams = teams,
+            isAdmin = isAdmin,
+            rankingType = rankingType,
+            competitionType = competitionType,
+            isCompetitionActive = isCompetitionActive,
+            onDeleteMatch = onDeleteMatch,
+            onUpdateResult = onUpdateResult,
+            onEditResult = onEditResult,
+            onMatchClick = onMatchClick
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+fun androidx.compose.foundation.lazy.LazyListScope.MatchesContent(
+    groupedMatches: Map<String, List<MatchResponse>>,
+    teams: List<TeamResponse>,
+    isAdmin: Boolean = false,
+    rankingType: String? = "ELO",
+    competitionType: String? = "LEAGUE",
+    isCompetitionActive: Boolean = true,
+    onDeleteMatch: ((Long) -> Unit)? = null,
+    onUpdateResult: ((Long, Int, Int) -> Unit)? = null,
+    onEditResult: ((Long, Int, Int) -> Unit)? = null,
+    onMatchClick: ((MatchResponse) -> Unit)? = null
+) {
+    groupedMatches.forEach { (header, matchesInGroup) ->
+        stickyHeader {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+            ) {
+                Text(
+                    text = header.uppercase(),
+                    modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.primary,
+                    letterSpacing = 1.sp
                 )
             }
         }
+        items(matchesInGroup) { match ->
+            MatchItem(
+                match = match,
+                teams = teams,
+                isAdmin = isAdmin,
+                rankingType = rankingType,
+                onDeleteMatch = onDeleteMatch,
+                onUpdateResult = onUpdateResult,
+                onEditResult = onEditResult,
+                onMatchClick = onMatchClick,
+                competitionType = competitionType,
+                isCompetitionActive = isCompetitionActive
+            )
+        }
+    }
+}
+
+private fun groupMatchesByHeader(
+    matches: List<MatchResponse>,
+    calendarGenerationMode: String?,
+    competitionType: String?
+): Map<String, List<MatchResponse>> {
+    val isLeague = competitionType == "LEAGUE"
+    val isRounds = calendarGenerationMode == "ROUNDS" || isLeague
+
+    return if (isRounds) {
+        matches.sortedWith(
+            compareBy<MatchResponse> { it.groupName ?: "" }
+                .thenBy { it.roundNumber ?: Int.MAX_VALUE }
+                .thenBy { it.playedAt ?: "" }
+                .thenBy { it.id }
+        ).groupBy { match ->
+            if (match.groupName != null) {
+                // If it belongs to a group, show group name + round
+                val roundText = match.roundNumber?.let { " - Giornata $it" } ?: ""
+                "${match.groupName}$roundText"
+            } else if (isLeague) {
+                match.roundNumber?.let { "Giornata $it" } ?: "Altre partite"
+            } else {
+                match.roundNumber?.let { round ->
+                    when (round) {
+                        1 -> "Finale"
+                        2 -> "Semifinali"
+                        4 -> "Quarti"
+                        8 -> "Ottavi"
+                        16 -> "Sedicesimi"
+                        else -> "Turno $round"
+                    }
+                } ?: "Altre partite"
+            }
+        }
+    } else {
+        matches.sortedByDescending { it.playedAt ?: "" }
+            .groupBy { match ->
+                match.playedAt?.let {
+                    try {
+                        val dt = LocalDateTime.parse(it.substring(0, 19))
+                        val date = dt.toLocalDate()
+                        val today = LocalDate.now()
+                        val yesterday = today.minusDays(1)
+                        val dateFormatted = date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+
+                        when (date) {
+                            today -> "OGGI ($dateFormatted)"
+                            yesterday -> "IERI ($dateFormatted)"
+                            else -> dateFormatted
+                        }
+                    } catch (e: Exception) {
+                        e.message;
+                        "Altre"
+                    }
+                } ?: "Da giocare"
+            }
     }
 }
 

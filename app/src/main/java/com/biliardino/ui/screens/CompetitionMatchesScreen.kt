@@ -53,7 +53,10 @@ fun CompetitionMatchesScreen(league: LeagueResponse, season: SeasonResponse, com
                         val isAdmin = s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER"
                         val isCompetitionActive = competition.active ?: (competition.status == "ACTIVE" || competition.status == null)
                         MatchList(
-                            matches = s.seasonMatches,
+                            matches = s.seasonMatches.filter { match ->
+                                val isPlayed = match.scoreA != null && match.scoreB != null
+                                !isPlayed && !match.knockoutStage
+                            },
                             teams = s.seasonTeams,
                             isAdmin = isAdmin,
                             rankingType = competition.competitionRankingType,
@@ -61,8 +64,16 @@ fun CompetitionMatchesScreen(league: LeagueResponse, season: SeasonResponse, com
                             competitionType = competition.type,
                             isCompetitionActive = isCompetitionActive,
                             onDeleteMatch = { matchId -> vm.deleteMatch(competition.id, matchId) },
-                            onUpdateResult = { matchId, sA, sB -> vm.updateMatchResult(competition.id, matchId, sA, sB) },
-                            onEditResult = { matchId, sA, sB -> vm.editMatchResult(competition.id, matchId, sA, sB) },
+                            onUpdateResult = { matchId, sA, sB -> 
+                                vm.updateMatchResult(competition.id, matchId, sA, sB).invokeOnCompletion {
+                                    vm.refreshCompetitionData(league.id, competition.id, competition.rankingMode)
+                                }
+                            },
+                            onEditResult = { matchId, sA, sB -> 
+                                vm.editMatchResult(competition.id, matchId, sA, sB).invokeOnCompletion {
+                                    vm.refreshCompetitionData(league.id, competition.id, competition.rankingMode)
+                                }
+                            },
                             onMatchClick = { match ->
                                 vm.loadMatchComments(match.id)
                                 vm.navigateTo(Screen.MatchDetail(match))

@@ -114,6 +114,9 @@ interface CompetitionApi {
     @POST("competitions/{competitionId}/teams")
     suspend fun createCompetitionTeam(@Path("competitionId") competitionId: Long, @Body request: CreateTeamRequest): TeamResponse
 
+    @DELETE("competitions/{competitionId}/teams/{teamId}")
+    suspend fun deleteCompetitionTeam(@Path("competitionId") competitionId: Long, @Path("teamId") teamId: Long)
+
     @GET("competitions/{competitionId}/teams/{teamId}")
     suspend fun getTeam(@Path("competitionId") competitionId: Long, @Path("teamId") teamId: Long): TeamResponse
 
@@ -162,6 +165,12 @@ interface CompetitionApi {
     @DELETE("competitions/{competitionId}")
     suspend fun deleteCompetition(@Path("competitionId") competitionId: Long)
 
+    @POST("competitions/{competitionId}/groups/generate")
+    suspend fun generateGroups(@Path("competitionId") competitionId: Long, @Body request: GenerateGroupsRequest)
+
+    @POST("competitions/{competitionId}/groups/matches/generate")
+    suspend fun generateGroupsCalendar(@Path("competitionId") competitionId: Long)
+
     @GET("competitions/{competitionId}/teams/{teamId}/statistics")
     suspend fun getTeamStatistics(
         @Path("competitionId") competitionId: Long,
@@ -198,6 +207,15 @@ interface CompetitionApi {
 
     @POST("competitions/{competitionId}/comments")
     suspend fun addCompetitionComment(@Path("competitionId") competitionId: Long, @Body request: CreateCompetitionCommentRequest): CompetitionCommentResponse
+
+    @GET("competitions/{competitionId}/groups")
+    suspend fun getCompetitionGroups(@Path("competitionId") competitionId: Long): List<CompetitionGroupResponse>
+
+    @GET("competitions/{competitionId}/groups/{groupId}/ranking")
+    suspend fun getGroupTeamRanking(@Path("competitionId") competitionId: Long, @Path("groupId") groupId: Long): GroupRankingResponse
+
+    @GET("competitions/{competitionId}/groups/{groupId}/ranking")
+    suspend fun getGroupPlayerRanking(@Path("competitionId") competitionId: Long, @Path("groupId") groupId: Long): GroupRankingResponse
 }
 
 interface MatchApi {

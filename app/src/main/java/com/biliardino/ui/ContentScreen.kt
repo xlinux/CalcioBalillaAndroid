@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
@@ -116,7 +117,8 @@ fun ContentScreen(vm: AppViewModel) {
                                     val season = s.currentSeason
                                     val competition = s.currentCompetition
                                     if (league != null && season != null && competition != null) {
-                                        vm.navigateTo(Screen.CompetitionMatches(league, season, competition))
+                                        vm.updateCompetitionMode("MATCHES") // Return to "Partite" area
+                                        vm.navigateTo(Screen.CompetitionStatistics(league, season, competition))
                                     } else {
                                         vm.navigateTo(Screen.MyLeagues)
                                     }
@@ -184,29 +186,42 @@ fun ContentScreen(vm: AppViewModel) {
                 if (league != null && season != null) {
                     NavigationBar {
                         if (competition != null) {
-                            val isCup = competition.type == "CUP"
                             NavigationBarItem(
-                                selected = screen is Screen.CompetitionStatistics || screen is Screen.TeamDetail || screen is Screen.PlayerDetail || screen is Screen.SeasonTeams || screen is Screen.CompetitionParticipants,
+                                selected = s.currentCompetitionMode == "MAIN" && screen is Screen.CompetitionStatistics,
                                 onClick = { 
+                                    vm.updateCompetitionMode("MAIN")
                                     vm.navigateTo(Screen.CompetitionStatistics(league, season, competition))
                                     vm.refreshCompetitionData(league.id, competition.id, competition.rankingMode)
                                 },
                                 icon = { Icon(Icons.Default.List, contentDescription = "Home") },
-                                label = { Text(if (isCup) "Tabellone" else "Stats") }
+                                label = { Text(if (competition.type == "CUP") "Tabellone" else "Home") }
                             )
-                            if (!isCup) {
-                                NavigationBarItem(
-                                    selected = screen is Screen.CompetitionMatches,
-                                    onClick = { 
-                                        vm.navigateTo(Screen.CompetitionMatches(league, season, competition))
-                                        vm.loadCompetitionMatches(competition.id)
-                                        vm.loadSeasonStatsData(league.id, season.id, competition.id)
-                                    },
-                                    icon = { Icon(Icons.Default.Add, contentDescription = "Partite") },
-                                    label = { Text("Partite") }
-                                )
-                            }
+
+                            // Unified "Partite" tab for all competition types
+                            NavigationBarItem(
+                                selected = s.currentCompetitionMode == "MATCHES" && screen is Screen.CompetitionStatistics,
+                                onClick = { 
+                                    vm.updateCompetitionMode("MATCHES")
+                                    vm.navigateTo(Screen.CompetitionStatistics(league, season, competition))
+                                    vm.refreshCompetitionData(league.id, competition.id, competition.rankingMode)
+                                },
+                                icon = { Icon(Icons.Default.Add, contentDescription = "Partite") },
+                                label = { Text("Partite") }
+                            )
+
+                            // "Storico" tab for all, positioned after Partite
+                            NavigationBarItem(
+                                selected = s.currentCompetitionMode == "HISTORY" && screen is Screen.CompetitionStatistics,
+                                onClick = { 
+                                    vm.updateCompetitionMode("HISTORY")
+                                    vm.navigateTo(Screen.CompetitionStatistics(league, season, competition))
+                                    vm.refreshCompetitionData(league.id, competition.id, competition.rankingMode)
+                                },
+                                icon = { Icon(Icons.Default.History, contentDescription = "Storico") },
+                                label = { Text("Storico") }
+                            )
                         }
+
                         NavigationBarItem(
                             selected = screen is Screen.SeasonSettings,
                             onClick = { 
@@ -248,6 +263,7 @@ fun ContentScreen(vm: AppViewModel) {
                     is Screen.TeamProfile -> TeamProfileScreen(screen.teamId, screen.name, s, vm)
                     is Screen.MatchDetail -> MatchDetailScreen(screen.match, s, vm)
                     is Screen.JoinTeam -> JoinTeamScreen(screen.league, screen.season, screen.competition, s, vm)
+                    is Screen.CreateTeam -> CreateTeamScreen(screen.league, screen.season, screen.competition, s, vm)
                 }
             }
 
@@ -293,4 +309,5 @@ private fun getScreenTitle(screen: Screen): String = when (screen) {
     is Screen.TeamProfile -> "Profilo: ${screen.name}"
     is Screen.MatchDetail -> "Dettaglio Partita"
     is Screen.JoinTeam -> "Partecipa alla Squadra"
+    is Screen.CreateTeam -> "Nuova Squadra"
 }
