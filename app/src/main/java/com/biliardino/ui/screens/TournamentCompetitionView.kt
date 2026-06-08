@@ -33,21 +33,23 @@ fun TournamentCompetitionView(
     vm: AppViewModel
 ) {
     val isGroups = competition.tournamentFormat == "GROUPS_THEN_SINGLE_ELIMINATION"
-    
+    var showFinalStagePopup by remember { mutableStateOf(false) }
+
     val participantsTabLabel = when (competition.matchType) {
         "TEAM" -> "Squadre"
         "SINGLE" -> "Giocatori"
         else -> "Partecipanti"
     }
 
-    val competitionMatches = s.seasonMatches.filter { it.competitionId == competition.id || it.competitionId == null } // The null check might be needed if competitionId isn't always present in match response
-    val hasMatches = competitionMatches.isNotEmpty()
-    val allGroupMatchesFinished = hasMatches && 
-            competitionMatches.filter { !it.knockoutStage }.all { it.scoreA != null && it.scoreB != null }
+    val finalStageGenerated = if (isGroups) {
+        s.finalStageStatus?.finalStageGenerated == true
+    } else {
+        s.seasonMatches.any { it.knockoutStage }
+    }
 
     val tabs = if (isGroups) {
         mutableListOf("Gironi").apply {
-            if (allGroupMatchesFinished) add("Fase Finale")
+            //if (finalStageGenerated) add("Fase Finale")
             add("Chat")
             add(participantsTabLabel)
         }
@@ -59,6 +61,14 @@ fun TournamentCompetitionView(
 
     LaunchedEffect(Unit) {
         vm.refreshCompetitionData(league.id, competition.id, competition.rankingMode)
+    }
+
+    // Popup logic for final stage generation
+    LaunchedEffect(s.finalStageStatus) {
+        val isAdmin = s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER"
+        if (isGroups && s.finalStageStatus?.canGenerateFinalStage == true && isAdmin) {
+            showFinalStagePopup = true
+        }
     }
 
     LaunchedEffect(selectedTab) {
@@ -152,6 +162,27 @@ fun TournamentCompetitionView(
                     }
                 }
             }
+        }
+
+        if (showFinalStagePopup) {
+            AlertDialog(
+                onDismissRequest = { showFinalStagePopup = false },
+                title = { Text("Gironi Terminati") },
+                text = { Text("I gironi sono terminati. Vuoi generare la fase finale?") },
+                confirmButton = {
+                    Button(onClick = {
+                        vm.generateFinalStage(competition.id)
+                        showFinalStagePopup = false
+                    }) {
+                        Text("Genera fase finale")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showFinalStagePopup = false }) {
+                        Text("Annulla")
+                    }
+                }
+            )
         }
     }
 }

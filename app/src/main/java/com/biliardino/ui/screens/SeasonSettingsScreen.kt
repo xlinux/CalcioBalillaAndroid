@@ -201,6 +201,14 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                             onClick = { vm.generateBracket(competition.id) },
                             color = MaterialTheme.colorScheme.primary
                         )
+                    } else if (s.finalStageStatus?.canGenerateFinalStage == true) {
+                        AdminActionCard(
+                            title = "Fase Finale",
+                            description = "I gironi sono terminati. Genera il tabellone della fase finale.",
+                            buttonText = "GENERA FASE FINALE",
+                            onClick = { vm.generateFinalStage(competition.id) },
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     } else {
                         AdminActionCard(
                             title = "Stato Gironi",

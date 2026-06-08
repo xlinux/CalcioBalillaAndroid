@@ -152,6 +152,21 @@ data class GenerateGroupsRequest(
 )
 
 @Serializable
+data class FinalStageStatusResponse(
+    val groupsTournament: Boolean,
+    val groupsGenerated: Boolean,
+    val groupMatchesGenerated: Boolean,
+    val groupStageCompleted: Boolean,
+    val finalStageGenerated: Boolean,
+    val canGenerateFinalStage: Boolean
+)
+
+@Serializable
+data class GenerateFinalStageRequest(
+    val qualifiedPerGroup: Int? = 2
+)
+
+@Serializable
 data class CompetitionGroupResponse(
     val id: Long,
     val name: String,

@@ -216,6 +216,12 @@ interface CompetitionApi {
 
     @GET("competitions/{competitionId}/groups/{groupId}/ranking")
     suspend fun getGroupPlayerRanking(@Path("competitionId") competitionId: Long, @Path("groupId") groupId: Long): GroupRankingResponse
+
+    @GET("competitions/{competitionId}/final-stage/status")
+    suspend fun getFinalStageStatus(@Path("competitionId") competitionId: Long): FinalStageStatusResponse
+
+    @POST("competitions/{competitionId}/final-stage/generate")
+    suspend fun generateFinalStage(@Path("competitionId") competitionId: Long, @Body request: GenerateFinalStageRequest)
 }
 
 interface MatchApi {

@@ -85,7 +85,8 @@ data class UiState(
     val hasSeenOnboarding: Boolean = false,
     val theme: String = "SYSTEM", // "LIGHT", "DARK", "SYSTEM"
     val currentCompetitionTab: Int = 0,
-    val currentCompetitionMode: String = "MAIN" // "MAIN", "MATCHES", "HISTORY"
+    val currentCompetitionMode: String = "MAIN", // "MAIN", "MATCHES", "HISTORY"
+    val finalStageStatus: FinalStageStatusResponse? = null
 )
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -415,6 +416,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             currentCompetition = competition,
             currentCompetitionTab = 0,
             currentCompetitionMode = "MAIN",
+            finalStageStatus = null,
             currentScreen = Screen.CompetitionStatistics(league, season, competition)
         )
     }
@@ -430,6 +432,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val teams = ApiClientBase.competitions.getCompetitionTeams(competitionId)
             val compPlayers = ApiClientBase.competitions.getCompetitionPlayers(competitionId)
             val leagueUsers = ApiClientBase.leagues.getLeagueUsers(leagueId)
+
+            val currentCompetition = _state.value.currentCompetition
+            if (currentCompetition?.type == "TOURNAMENT" && currentCompetition.tournamentFormat == "GROUPS_THEN_SINGLE_ELIMINATION") {
+                launch { loadFinalStageStatus(competitionId) }
+            }
 
             val enrichedUsers = compPlayers.map { player ->
                 val lu = leagueUsers.find { it.userId == player.userId }
@@ -840,6 +847,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         runCatching { ApiClientBase.competitions.generateGroupsCalendar(competitionId) }
             .onSuccess { _state.value = _state.value.copy(successMessage = "Calendario gironi generato!", loading = false); loadCompetitionMatches(competitionId) }
             .onFailure { e -> _state.value = _state.value.copy(loading = false, error = "Errore generazione calendario gironi: ${e.getErrorMessage()}") }
+    }
+
+    fun loadFinalStageStatus(competitionId: Long) = viewModelScope.launch {
+        runCatching { ApiClientBase.competitions.getFinalStageStatus(competitionId) }
+            .onSuccess { status ->
+                _state.value = _state.value.copy(finalStageStatus = status)
+            }
+    }
+
+    fun generateFinalStage(competitionId: Long, qualifiedPerGroup: Int = 2) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching { 
+            ApiClientBase.competitions.generateFinalStage(competitionId, GenerateFinalStageRequest(qualifiedPerGroup))
+        }
+            .onSuccess { 
+                _state.value = _state.value.copy(successMessage = "Fase finale generata!", loading = false)
+                refreshCompetitionData(_state.value.currentLeague?.id ?: 0L, competitionId, _state.value.currentCompetition?.rankingMode)
+            }
+            .onFailure { e -> 
+                _state.value = _state.value.copy(loading = false, error = "Errore generazione fase finale: ${e.getErrorMessage()}") 
+            }
     }
 
     fun closeLeague(leagueId: Long) = viewModelScope.launch {
