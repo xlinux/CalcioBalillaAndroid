@@ -117,7 +117,18 @@ fun ContentScreen(vm: AppViewModel) {
                                     val season = s.currentSeason
                                     val competition = s.currentCompetition
                                     if (league != null && season != null && competition != null) {
-                                        vm.updateCompetitionMode("MATCHES") // Return to "Partite" area
+                                        val phase = competition.phase
+                                        if (phase == "FINAL_STAGE" || phase == "READY_FOR_FINAL_STAGE") {
+                                            vm.updateCompetitionMode("MAIN")
+                                            val isGroups = competition.tournamentFormat == "GROUPS_THEN_SINGLE_ELIMINATION"
+                                            if (competition.type == "CUP" || !isGroups) {
+                                                vm.updateCompetitionTab(0) // Tabellone
+                                            } else {
+                                                vm.updateCompetitionTab(1) // Fase Finale
+                                            }
+                                        } else {
+                                            vm.updateCompetitionMode("MATCHES") // Return to "Partite" area
+                                        }
                                         vm.navigateTo(Screen.CompetitionStatistics(league, season, competition))
                                     } else {
                                         vm.navigateTo(Screen.MyLeagues)
@@ -196,11 +207,10 @@ fun ContentScreen(vm: AppViewModel) {
                                 icon = { Icon(Icons.Default.List, contentDescription = "Home") },
                                 label = { Text(if (competition.type == "CUP") "Tabellone" else "Home") }
                             )
-
-                            // Unified "Partite" tab for all competition types
+                            
                             NavigationBarItem(
-                                selected = s.currentCompetitionMode == "MATCHES" && screen is Screen.CompetitionStatistics,
-                                onClick = { 
+                                selected = s.currentCompetitionMode == "MATCHES",
+                                onClick = {
                                     vm.updateCompetitionMode("MATCHES")
                                     vm.navigateTo(Screen.CompetitionStatistics(league, season, competition))
                                     vm.refreshCompetitionData(league.id, competition.id, competition.rankingMode)
@@ -211,7 +221,7 @@ fun ContentScreen(vm: AppViewModel) {
 
                             // "Storico" tab for all, positioned after Partite
                             NavigationBarItem(
-                                selected = s.currentCompetitionMode == "HISTORY" && screen is Screen.CompetitionStatistics,
+                                selected = s.currentCompetitionMode == "HISTORY",
                                 onClick = { 
                                     vm.updateCompetitionMode("HISTORY")
                                     vm.navigateTo(Screen.CompetitionStatistics(league, season, competition))

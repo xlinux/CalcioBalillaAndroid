@@ -11,7 +11,7 @@ import retrofit2.Retrofit
 
 object ApiClientBase {
     //private const val BASE_URL = "https://api-collaudo.gestionecampionati.com"
-    private const val BASE_URL = "http://192.168.1.10:8080/"
+    private const val BASE_URL = "http://192.168.1.34:8080/"
 
     var authToken: String? = null
     var onAuthFailure: (() -> Unit)? = null

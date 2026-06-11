@@ -1,7 +1,6 @@
 package com.biliardino.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,9 +16,7 @@ import androidx.compose.ui.unit.sp
 import com.biliardino.model.*
 import com.biliardino.ui.Screen
 import androidx.compose.foundation.rememberScrollState
-import com.biliardino.ui.components.MatchList
 import com.biliardino.ui.components.MatchesContent
-import com.biliardino.ui.components.TournamentBracketView
 import com.biliardino.viewmodel.AppViewModel
 import com.biliardino.viewmodel.UiState
 
@@ -34,6 +31,7 @@ fun TournamentCompetitionView(
 ) {
     val isGroups = competition.tournamentFormat == "GROUPS_THEN_SINGLE_ELIMINATION"
     var showFinalStagePopup by remember { mutableStateOf(false) }
+    var qualifiedPerGroup by remember { mutableIntStateOf(2) }
 
     val participantsTabLabel = when (competition.matchType) {
         "TEAM" -> "Squadre"
@@ -131,7 +129,19 @@ fun TournamentCompetitionView(
 
         Box(Modifier.weight(1f)) {
             when (s.currentCompetitionMode) {
-                "MATCHES" -> CompetitionMatchesScreen(league, season, competition, s, vm)
+                "MATCHES" -> {
+                    if (competition.phase == "FINAL_STAGE" || competition.phase == "READY_FOR_FINAL_STAGE") {
+                        CupCompetitionView(
+                            league = league,
+                            season = season,
+                            competition = competition,
+                            s = s.copy(currentCompetitionMode = "MAIN", currentCompetitionTab = 0),
+                            vm = vm
+                        )
+                    } else {
+                        CompetitionMatchesScreen(league, season, competition, s, vm)
+                    }
+                }
                 "HISTORY" -> TournamentMatchesTab(league, s, competition, vm, onlyPlayed = true)
                 else -> {
                     val tabTitle = tabs[selectedTab]
@@ -167,11 +177,29 @@ fun TournamentCompetitionView(
         if (showFinalStagePopup) {
             AlertDialog(
                 onDismissRequest = { showFinalStagePopup = false },
-                title = { Text("Gironi Terminati") },
-                text = { Text("I gironi sono terminati. Vuoi generare la fase finale?") },
+                title = { Text("Gironi conclusi") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Text("Scegli quante squadre per girone devono accedere alla fase finale.")
+                        
+                        Text("Squadre qualificate per girone", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            listOf(1, 2, 4).forEach { value ->
+                                FilterChip(
+                                    selected = qualifiedPerGroup == value,
+                                    onClick = { qualifiedPerGroup = value },
+                                    label = { Text(value.toString()) }
+                                )
+                            }
+                        }
+                    }
+                },
                 confirmButton = {
                     Button(onClick = {
-                        vm.generateFinalStage(competition.id)
+                        vm.generateFinalStage(competition.id, qualifiedPerGroup)
                         showFinalStagePopup = false
                     }) {
                         Text("Genera fase finale")
@@ -299,37 +327,73 @@ fun TournamentMatchesTab(
     onlyPlayed: Boolean = false
 ) {
     val allMatches = s.seasonMatches
-    val matches = remember(allMatches, onlyUnplayed, onlyPlayed) {
-        allMatches.filter { match ->
+    val groupMatches = remember(allMatches) {
+        allMatches.filter { !it.knockoutStage }
+    }
+    
+    val knockoutMatches = remember(allMatches) {
+        allMatches.filter { it.knockoutStage }
+    }
+
+    val filteredGroupMatches = remember(groupMatches, onlyUnplayed, onlyPlayed) {
+        groupMatches.filter { match ->
             val isPlayed = match.scoreA != null && match.scoreB != null
             when {
-                onlyUnplayed -> !isPlayed && !match.knockoutStage
-                onlyPlayed -> isPlayed && !match.knockoutStage
+                onlyUnplayed -> !isPlayed
+                onlyPlayed -> isPlayed
                 else -> true
             }
         }
     }
 
-    if (matches.isEmpty() && !s.loading) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            val emptyMsg = when {
-                onlyUnplayed -> "Tutte le partite di questa fase sono state giocate."
-                onlyPlayed -> "Ancora nessuna partita giocata."
-                else -> "Nessuna partita programmata."
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 16.dp)
+    ) {
+        if (knockoutMatches.isNotEmpty()) {
+            item {
+                Text(
+                    "Fase Finale", 
+                    style = MaterialTheme.typography.titleMedium, 
+                    fontWeight = FontWeight.Black,
+                    modifier = Modifier.padding(16.dp),
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Box(Modifier.height(300.dp).fillMaxWidth()) {
+                    TournamentBracketView(
+                        matches = knockoutMatches,
+                        onMatchClick = { match ->
+                            vm.loadMatchComments(match.id)
+                            vm.navigateTo(Screen.MatchDetail(match))
+                        }
+                    )
+                }
+                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = 8.dp))
             }
-            Text(emptyMsg, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-    } else {
-        // Group by Group
-        val groupedByGroup = remember(matches) {
-            matches.sortedWith(
+
+        if (filteredGroupMatches.isEmpty() && !s.loading) {
+            item {
+                Box(
+                    modifier = Modifier.fillParentMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val emptyMsg = when {
+                        onlyUnplayed -> "Tutte le partite di questa fase sono state giocate."
+                        onlyPlayed -> "Ancora nessuna partita giocata."
+                        else -> "Nessuna partita programmata."
+                    }
+                    Text(emptyMsg, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        } else if (filteredGroupMatches.isNotEmpty()) {
+            // Group by Group
+            val groupedByGroup = filteredGroupMatches.sortedWith(
                 compareBy<MatchResponse> { it.groupName ?: "" }
                     .thenBy { it.roundNumber ?: 0 }
             ).groupBy { it.groupName ?: "" }
-        }
 
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp)) {
-            groupedByGroup.forEach { (groupName, groupMatches) ->
+            groupedByGroup.forEach { (groupName, groupMatchesInList) ->
                 stickyHeader {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -347,7 +411,7 @@ fun TournamentMatchesTab(
                 }
                 
                 // Group groupMatches by RoundHeader
-                val groupedByHeader = groupMatches.groupBy { match -> 
+                val groupedByHeader = groupMatchesInList.groupBy { match -> 
                     match.roundNumber?.let { "Giornata $it" } ?: "Altre partite"
                 }
 
@@ -358,7 +422,7 @@ fun TournamentMatchesTab(
                     rankingType = competition.competitionRankingType,
                     competitionType = "LEAGUE",
                     isCompetitionActive = competition.active ?: (competition.status == "ACTIVE" || competition.status == null),
-                    onDeleteMatch = { vm.deleteMatch(competition.id, it) },
+                    onDeleteMatch = { matchId -> vm.deleteMatch(competition.id, matchId) },
                     onUpdateResult = { id, sa, sb -> 
                         vm.updateMatchResult(competition.id, id, sa, sb).invokeOnCompletion {
                             vm.refreshCompetitionData(league.id, competition.id, competition.rankingMode)

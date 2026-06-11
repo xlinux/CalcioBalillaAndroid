@@ -8,7 +8,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.biliardino.model.*
 import com.biliardino.ui.Screen
-import com.biliardino.ui.components.TournamentBracketView
 import com.biliardino.viewmodel.AppViewModel
 import com.biliardino.viewmodel.UiState
 

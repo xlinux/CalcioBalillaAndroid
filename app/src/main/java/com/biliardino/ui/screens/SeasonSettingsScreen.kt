@@ -25,6 +25,8 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
     var showCloseRegistrationConfirmation by remember { mutableStateOf(false) }
     var showDeleteCompetitionConfirmation by remember { mutableStateOf(false) }
     var showGenerateDialog by remember { mutableStateOf(false) }
+    var showFinalStageSelector by remember { mutableStateOf(false) }
+    var qualifiedPerGroup by remember { mutableIntStateOf(2) }
 
     LaunchedEffect(Unit) {
         vm.loadSeasonStatsData(league.id, season.id, competition?.id)
@@ -204,9 +206,9 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
                     } else if (s.finalStageStatus?.canGenerateFinalStage == true) {
                         AdminActionCard(
                             title = "Fase Finale",
-                            description = "I gironi sono terminati. Genera il tabellone della fase finale.",
+                            description = "I gironi sono terminati. Scegli quante squadre qualificare e genera il tabellone.",
                             buttonText = "GENERA FASE FINALE",
-                            onClick = { vm.generateFinalStage(competition.id) },
+                            onClick = { showFinalStageSelector = true },
                             color = MaterialTheme.colorScheme.primary
                         )
                     } else {
@@ -410,6 +412,45 @@ fun SeasonSettingsScreen(league: LeagueResponse, season: SeasonResponse, competi
             dismissButton = {
                 TextButton(onClick = { showDeleteCompetitionConfirmation = false }) {
                     Text("ANNULLA")
+                }
+            }
+        )
+    }
+
+    if (showFinalStageSelector && competition != null) {
+        AlertDialog(
+            onDismissRequest = { showFinalStageSelector = false },
+            title = { Text("Gironi conclusi") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("Scegli quante squadre per girone devono accedere alla fase finale.")
+                    
+                    Text("Squadre qualificate per girone", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        listOf(1, 2, 4).forEach { value ->
+                            FilterChip(
+                                selected = qualifiedPerGroup == value,
+                                onClick = { qualifiedPerGroup = value },
+                                label = { Text(value.toString()) }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    vm.generateFinalStage(competition.id, qualifiedPerGroup)
+                    showFinalStageSelector = false
+                }) {
+                    Text("Genera fase finale")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFinalStageSelector = false }) {
+                    Text("Annulla")
                 }
             }
         )

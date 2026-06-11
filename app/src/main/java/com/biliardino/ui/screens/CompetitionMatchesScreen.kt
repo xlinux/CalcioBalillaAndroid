@@ -1,6 +1,7 @@
 package com.biliardino.ui.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -18,11 +19,27 @@ import com.biliardino.model.*
 import com.biliardino.ui.Screen
 import com.biliardino.ui.components.MatchList
 import com.biliardino.ui.components.SearchableTeamDropdown
+import com.biliardino.ui.components.groupMatchesByHeader
 import com.biliardino.viewmodel.AppViewModel
 import com.biliardino.viewmodel.UiState
 
 @Composable
 fun CompetitionMatchesScreen(league: LeagueResponse, season: SeasonResponse, competition: CompetitionResponse, s: UiState, vm: AppViewModel) {
+    val isFinalStage = competition.phase == "FINAL_STAGE" || competition.phase == "READY_FOR_FINAL_STAGE"
+    
+    // For tournaments in final stage, we render the entire CupCompetitionView
+    // as requested, bypassing the standard unplayed matches list.
+    if (competition.type == "TOURNAMENT" && isFinalStage) {
+        CupCompetitionView(
+            league = league,
+            season = season,
+            competition = competition,
+            s = s.copy(currentCompetitionMode = "MAIN", currentCompetitionTab = 0),
+            vm = vm
+        )
+        return
+    }
+
     var showMatchForm by remember { mutableStateOf(false) }
     val isTeamType = competition.matchType == "TEAM" || competition.rankingMode == "TEAM"
 
@@ -38,52 +55,54 @@ fun CompetitionMatchesScreen(league: LeagueResponse, season: SeasonResponse, com
                 onCancel = { showMatchForm = false }
             )
         } else {
-            Column(Modifier.fillMaxSize()) {
-                if (s.seasonMatches.isEmpty() && !s.loading) {
-                    Box(Modifier.weight(1f).fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                        Text(
-                            "Nessuna partita registrata per questa competizione.",
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+            val isAdmin = s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER"
+            val isCompetitionActive = competition.active ?: (competition.status == "ACTIVE" || competition.status == null)
+            
+            if (s.seasonMatches.isEmpty() && !s.loading) {
+                Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                    Text(
+                        "Nessuna partita registrata per questa competizione.",
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                // Group stage or Cup before bracket generation: show unplayed matches list
+                val allUnplayed = s.seasonMatches.filter { it.scoreA == null || it.scoreB == null }
+                
+                if (allUnplayed.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Nessuna partita da giocare.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 } else {
-                    Box(Modifier.weight(1f)) {
-                        val isAdmin = s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER"
-                        val isCompetitionActive = competition.active ?: (competition.status == "ACTIVE" || competition.status == null)
-                        MatchList(
-                            matches = s.seasonMatches.filter { match ->
-                                val isPlayed = match.scoreA != null && match.scoreB != null
-                                !isPlayed && !match.knockoutStage
-                            },
-                            teams = s.seasonTeams,
-                            isAdmin = isAdmin,
-                            rankingType = competition.competitionRankingType,
-                            calendarGenerationMode = competition.calendarGenerationMode,
-                            competitionType = competition.type,
-                            isCompetitionActive = isCompetitionActive,
-                            onDeleteMatch = { matchId -> vm.deleteMatch(competition.id, matchId) },
-                            onUpdateResult = { matchId, sA, sB -> 
-                                vm.updateMatchResult(competition.id, matchId, sA, sB).invokeOnCompletion {
-                                    vm.refreshCompetitionData(league.id, competition.id, competition.rankingMode)
-                                }
-                            },
-                            onEditResult = { matchId, sA, sB -> 
-                                vm.editMatchResult(competition.id, matchId, sA, sB).invokeOnCompletion {
-                                    vm.refreshCompetitionData(league.id, competition.id, competition.rankingMode)
-                                }
-                            },
-                            onMatchClick = { match ->
-                                vm.loadMatchComments(match.id)
-                                vm.navigateTo(Screen.MatchDetail(match))
+                    MatchList(
+                        matches = allUnplayed,
+                        teams = s.seasonTeams,
+                        isAdmin = isAdmin,
+                        rankingType = competition.competitionRankingType,
+                        calendarGenerationMode = competition.calendarGenerationMode,
+                        competitionType = competition.type,
+                        isCompetitionActive = isCompetitionActive,
+                        onDeleteMatch = { matchId: Long -> vm.deleteMatch(competition.id, matchId) },
+                        onUpdateResult = { matchId: Long, sA: Int, sB: Int -> 
+                            vm.updateMatchResult(competition.id, matchId, sA, sB).invokeOnCompletion {
+                                vm.refreshCompetitionData(league.id, competition.id, competition.rankingMode)
                             }
-                        )
-                    }
+                        },
+                        onEditResult = { matchId: Long, sA: Int, sB: Int -> 
+                            vm.editMatchResult(competition.id, matchId, sA, sB).invokeOnCompletion {
+                                vm.refreshCompetitionData(league.id, competition.id, competition.rankingMode)
+                            }
+                        },
+                        onMatchClick = { match: MatchResponse ->
+                            vm.loadMatchComments(match.id)
+                            vm.navigateTo(Screen.MatchDetail(match))
+                        }
+                    )
                 }
             }
 
-            val isAdmin = s.currentUserRoleInLeague == "ADMIN" || s.currentUserRoleInLeague == "OWNER"
             val isJoined = competition.currentUserJoined
             val showAddButton = competition.matchCreationMode == "FREE" && 
                                 (competition.status == "ACTIVE" || competition.status == null) && 

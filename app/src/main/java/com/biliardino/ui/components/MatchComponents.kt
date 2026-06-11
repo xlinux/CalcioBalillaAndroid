@@ -34,6 +34,7 @@ import java.time.format.DateTimeFormatter
 fun MatchList(
     matches: List<MatchResponse>,
     teams: List<TeamResponse>,
+    modifier: Modifier = Modifier,
     isAdmin: Boolean = false,
     rankingType: String? = "ELO",
     calendarGenerationMode: String? = "SEQUENTIAL",
@@ -46,7 +47,7 @@ fun MatchList(
 ) {
     val groupedMatches = groupMatchesByHeader(matches, calendarGenerationMode, competitionType)
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         MatchesContent(
             groupedMatches = groupedMatches,
             teams = teams,
@@ -108,13 +109,13 @@ fun androidx.compose.foundation.lazy.LazyListScope.MatchesContent(
     }
 }
 
-private fun groupMatchesByHeader(
+fun groupMatchesByHeader(
     matches: List<MatchResponse>,
     calendarGenerationMode: String?,
     competitionType: String?
 ): Map<String, List<MatchResponse>> {
     val isLeague = competitionType == "LEAGUE"
-    val isRounds = calendarGenerationMode == "ROUNDS" || isLeague
+    val isRounds = calendarGenerationMode == "ROUNDS" || isLeague || competitionType == "CUP" || competitionType == "TOURNAMENT"
 
     return if (isRounds) {
         matches.sortedWith(
@@ -130,7 +131,7 @@ private fun groupMatchesByHeader(
             } else if (isLeague) {
                 match.roundNumber?.let { "Giornata $it" } ?: "Altre partite"
             } else {
-                match.roundNumber?.let { round ->
+                match.bracketRound?.let { round ->
                     when (round) {
                         1 -> "Finale"
                         2 -> "Semifinali"

@@ -143,7 +143,8 @@ data class CompetitionResponse(
     val tournamentFormat: String? = null, // SINGLE_ELIMINATION, GROUPS_THEN_SINGLE_ELIMINATION
     val winnerTeamId: Long? = null,
     val winnerUserId: Long? = null,
-    val closedAt: String? = null
+    val closedAt: String? = null,
+    val phase: String? = null // SETUP,GROUP_STAGE,     READY_FOR_FINAL_STAGE, ,FINAL_STAGE,  COMPLETED
 )
 
 @Serializable

@@ -1,4 +1,4 @@
-package com.biliardino.ui.components
+package com.biliardino.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
