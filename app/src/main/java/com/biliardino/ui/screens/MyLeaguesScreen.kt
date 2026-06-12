@@ -1,10 +1,15 @@
 package com.biliardino.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.*
@@ -12,9 +17,14 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.biliardino.model.LeagueResponse
+import com.biliardino.model.MyCompetitionResponse
 import com.biliardino.viewmodel.AppViewModel
 import com.biliardino.viewmodel.UiState
 
@@ -44,6 +54,29 @@ fun MyLeaguesScreen(s: UiState, vm: AppViewModel) {
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // --- Nuova Sezione "I miei campionati" ---
+                item {
+                    LeagueSectionHeader(
+                        title = "I miei campionati",
+                        count = s.myCompetitions.size
+                    )
+                }
+
+                if (s.myCompetitions.isEmpty() && !s.loading) {
+                    item {
+                        EmptyLeagueCard("Non partecipi ancora a nessun campionato.")
+                    }
+                } else {
+                    items(s.myCompetitions) { competition ->
+                        MyCompetitionCard(
+                            competition = competition,
+                            onClick = { vm.selectMyCompetition(competition) }
+                        )
+                    }
+                }
+
+                item { Spacer(Modifier.height(8.dp)) }
+
                 if (s.myLeagues.isNotEmpty()) {
                     item {
                         LeagueSectionHeader(
@@ -175,7 +208,12 @@ fun MyLeaguesScreen(s: UiState, vm: AppViewModel) {
                     onDismissRequest = { showCreateDialog = false },
                     title = { Text("Nuovo $typeName") },
                     text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             OutlinedTextField(
                                 value = s.newLeagueName,
                                 onValueChange = vm::onNewLeagueNameChange,
@@ -188,6 +226,19 @@ fun MyLeaguesScreen(s: UiState, vm: AppViewModel) {
                                 label = { Text("Descrizione") },
                                 modifier = Modifier.fillMaxWidth()
                             )
+                            
+                            if (isClub) {
+                                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                                Text("Localizzazione", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                
+                                OutlinedTextField(
+                                    value = s.newLeagueAddress,
+                                    onValueChange = vm::onNewLeagueAddressChange,
+                                    label = { Text("Indirizzo") },
+                                    placeholder = { Text("es: Via Roma 1, Milano") },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
                     },
                     confirmButton = {
@@ -250,6 +301,126 @@ fun MyLeaguesScreen(s: UiState, vm: AppViewModel) {
 }
 
 @Composable
+fun MyCompetitionCard(
+    competition: MyCompetitionResponse,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Surface(
+                    modifier = Modifier.size(44.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                ) {
+                    Icon(
+                        imageVector = if (competition.type == "CUP") Icons.Default.EmojiEvents else Icons.Default.Groups,
+                        contentDescription = null,
+                        modifier = Modifier.padding(10.dp).fillMaxSize(),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = competition.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        MyCompetitionStatusChip(competition.active)
+                    }
+                    
+                    Text(
+                        text = "${competition.leagueName} • ${competition.seasonName}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Icon(
+                    Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.align(Alignment.CenterVertically)
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                MyCompInfoChip(competition.sportName, MaterialTheme.colorScheme.secondary)
+                MyCompInfoChip(if (competition.type == "LEAGUE") "Campionato" else "Torneo", MaterialTheme.colorScheme.tertiary)
+                MyCompInfoChip(
+                    when(competition.rankingMode) {
+                        "PLAYER" -> "Giocatori"
+                        "TEAM" -> "Squadre"
+                        else -> "Entrambe"
+                    }, 
+                    MaterialTheme.colorScheme.outline
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MyCompetitionStatusChip(active: Boolean) {
+    val color = if (active) Color(0xFF4CAF50) else Color(0xFF757575)
+    Surface(
+        color = color.copy(alpha = 0.12f),
+        shape = androidx.compose.foundation.shape.CircleShape
+    ) {
+        Text(
+            text = if (active) "ATTIVA" else "CONCLUSA",
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            fontWeight = FontWeight.Bold,
+            fontSize = 9.sp
+        )
+    }
+}
+
+@Composable
+private fun MyCompInfoChip(text: String, color: Color) {
+    Surface(
+        color = color.copy(alpha = 0.08f),
+        shape = MaterialTheme.shapes.extraSmall,
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, color.copy(alpha = 0.2f))
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            fontWeight = FontWeight.Medium,
+            fontSize = 10.sp
+        )
+    }
+}
+
+@Composable
 private fun CreationOptionCard(
     title: String,
     description: String,
@@ -306,7 +477,7 @@ private fun EmptyLeagueCard(message: String) {
             Text(
                 message,
                 style = MaterialTheme.typography.bodyMedium,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

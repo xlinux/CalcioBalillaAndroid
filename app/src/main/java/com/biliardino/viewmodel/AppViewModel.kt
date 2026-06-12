@@ -43,6 +43,7 @@ data class UiState(
     val sports: List<SportResponse> = emptyList(),
     val competitionTemplates: List<CompetitionTemplateResponse> = emptyList(),
     val currentCompetition: CompetitionResponse? = null,
+    val myCompetitions: List<MyCompetitionResponse> = emptyList(),
     val playerRankings: List<PlayerRankingResponse> = emptyList(),
     val teamRankings: List<TeamRankingResponse> = emptyList(),
     val competitionPlayers: List<LeagueMemberResponse> = emptyList(),
@@ -74,6 +75,9 @@ data class UiState(
     val newLeagueName: String = "",
     val newLeagueDescription: String = "",
     val newLeagueType: String = "PRIVATE_LEAGUE", // "PRIVATE_LEAGUE", "CLUB"
+    val newLeagueAddress: String = "",
+    val newLeagueLatitude: String = "",
+    val newLeagueLongitude: String = "",
     val inviteCode: String = "",
     
     val loading: Boolean = false,
@@ -86,7 +90,8 @@ data class UiState(
     val theme: String = "SYSTEM", // "LIGHT", "DARK", "SYSTEM"
     val currentCompetitionTab: Int = 0,
     val currentCompetitionMode: String = "MAIN", // "MAIN", "MATCHES", "HISTORY"
-    val finalStageStatus: FinalStageStatusResponse? = null
+    val finalStageStatus: FinalStageStatusResponse? = null,
+    val fromMyCompetitions: Boolean = false
 )
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -158,6 +163,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun onNewLeagueNameChange(v: String) { _state.value = _state.value.copy(newLeagueName = v) }
     fun onNewLeagueDescriptionChange(v: String) { _state.value = _state.value.copy(newLeagueDescription = v) }
     fun onNewLeagueTypeChange(v: String) { _state.value = _state.value.copy(newLeagueType = v) }
+    fun onNewLeagueAddressChange(v: String) { _state.value = _state.value.copy(newLeagueAddress = v) }
+    fun onNewLeagueLatitudeChange(v: String) { _state.value = _state.value.copy(newLeagueLatitude = v) }
+    fun onNewLeagueLongitudeChange(v: String) { _state.value = _state.value.copy(newLeagueLongitude = v) }
     fun onInviteCodeChange(v: String) { _state.value = _state.value.copy(inviteCode = v) }
 
     fun navigateTo(screen: Screen) {
@@ -319,34 +327,96 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadMyLeagues() = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
-        runCatching { ApiClientBase.leagues.getMyLeagues() }
-            .onSuccess { 
-                _state.value = _state.value.copy(
-                    myLeagues = it, 
-                    loading = false
-                ) 
-            }
-            .onFailure { _state.value = _state.value.copy(loading = false, error = it.getErrorMessage()) }
+        
+        launch {
+            runCatching { ApiClientBase.leagues.getMyLeagues() }
+                .onSuccess { 
+                    _state.value = _state.value.copy(
+                        myLeagues = it, 
+                        loading = false
+                    ) 
+                }
+                .onFailure { _state.value = _state.value.copy(loading = false, error = it.getErrorMessage()) }
+        }
+
+        launch {
+            runCatching { ApiClientBase.competitions.getMyCompetitions() }
+                .onSuccess { 
+                    _state.value = _state.value.copy(myCompetitions = it) 
+                }
+                .onFailure { Log.e("AppViewModel", "Failed to load my competitions", it) }
+        }
     }
 
     fun createLeague() = viewModelScope.launch {
         val name = _state.value.newLeagueName
         val description = _state.value.newLeagueDescription
         val type = _state.value.newLeagueType
+        val address = _state.value.newLeagueAddress.takeIf { it.isNotBlank() }
+        val latitude = _state.value.newLeagueLatitude.toDoubleOrNull()
+        val longitude = _state.value.newLeagueLongitude.toDoubleOrNull()
+        
         if (name.isBlank()) return@launch
 
         _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
-        runCatching { ApiClientBase.leagues.createLeague(CreateLeagueRequest(name, description, type)) }
+        runCatching { 
+            ApiClientBase.leagues.createLeague(
+                CreateLeagueRequest(
+                    name = name, 
+                    description = description, 
+                    leagueType = type,
+                    address = address,
+                    latitude = latitude,
+                    longitude = longitude
+                )
+            ) 
+        }
             .onSuccess { 
                 _state.value = _state.value.copy(
                     successMessage = "Lega creata con successo!", 
                     loading = false,
                     newLeagueName = "",
-                    newLeagueDescription = ""
+                    newLeagueDescription = "",
+                    newLeagueAddress = "",
+                    newLeagueLatitude = "",
+                    newLeagueLongitude = ""
                 )
                 loadMyLeagues()
             }
             .onFailure { _state.value = _state.value.copy(loading = false, error = it.getErrorMessage()) }
+    }
+
+    fun updateLeague(leagueId: Long) = viewModelScope.launch {
+        val name = _state.value.newLeagueName
+        val description = _state.value.newLeagueDescription
+        val address = _state.value.newLeagueAddress.takeIf { it.isNotBlank() }
+        val latitude = _state.value.newLeagueLatitude.toDoubleOrNull()
+        val longitude = _state.value.newLeagueLongitude.toDoubleOrNull()
+
+        if (name.isBlank()) return@launch
+
+        _state.value = _state.value.copy(loading = true, error = null, successMessage = null)
+        runCatching {
+            ApiClientBase.leagues.updateLeague(
+                leagueId,
+                UpdateLeagueRequest(
+                    name = name,
+                    description = description,
+                    address = address,
+                    latitude = latitude,
+                    longitude = longitude
+                )
+            )
+        }.onSuccess { updatedLeague ->
+            _state.value = _state.value.copy(
+                successMessage = "Lega aggiornata con successo!",
+                loading = false,
+                currentLeague = updatedLeague
+            )
+            loadMyLeagues()
+        }.onFailure { e ->
+            _state.value = _state.value.copy(loading = false, error = e.getErrorMessage())
+        }
     }
 
     fun joinLeague() = viewModelScope.launch {
@@ -364,6 +434,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 loadMyLeagues()
             }
             .onFailure { _state.value = _state.value.copy(loading = false, error = it.getErrorMessage()) }
+    }
+
+    fun prepareEditLeague(league: LeagueResponse) {
+        _state.value = _state.value.copy(
+            newLeagueName = league.name,
+            newLeagueDescription = league.description,
+            newLeagueType = league.leagueType ?: "PRIVATE_LEAGUE",
+            newLeagueAddress = league.address ?: "",
+            newLeagueLatitude = league.latitude?.toString() ?: "",
+            newLeagueLongitude = league.longitude?.toString() ?: ""
+        )
     }
 
     fun selectLeague(league: LeagueResponse) = viewModelScope.launch {
@@ -416,9 +497,42 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             currentCompetition = competition,
             currentCompetitionTab = 0,
             currentCompetitionMode = "MAIN",
+            fromMyCompetitions = false,
             finalStageStatus = null,
             currentScreen = Screen.CompetitionStatistics(league, season, competition)
         )
+    }
+
+    fun selectMyCompetition(myComp: MyCompetitionResponse) {
+        // Reconstruct minimal objects for navigation context from the 'mine' response
+        val league = LeagueResponse(id = myComp.leagueId, name = myComp.leagueName, description = "")
+        val season = SeasonResponse(id = myComp.seasonId, leagueId = myComp.leagueId, name = myComp.seasonName, startDate = "", endDate = "")
+        val competition = CompetitionResponse(
+            id = myComp.id,
+            seasonId = myComp.seasonId,
+            name = myComp.name,
+            type = myComp.type,
+            phase = myComp.phase,
+            rankingMode = myComp.rankingMode,
+            active = myComp.active,
+            sportId = myComp.sportId,
+            sportName = myComp.sportName,
+            currentUserJoined = true
+        )
+
+        _state.value = _state.value.copy(
+            currentLeague = league,
+            currentSeason = season,
+            currentCompetition = competition,
+            currentCompetitionTab = 0,
+            currentCompetitionMode = "MAIN",
+            fromMyCompetitions = true,
+            finalStageStatus = null,
+            currentScreen = Screen.CompetitionStatistics(league, season, competition)
+        )
+        
+        // Refresh specific competition data (matches, standings, etc.) 
+        refreshCompetitionData(league.id, competition.id, competition.rankingMode)
     }
 
     fun refreshCompetitionData(leagueId: Long, competitionId: Long, rankingMode: String? = null) = viewModelScope.launch {

@@ -24,6 +24,9 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,6 +41,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import com.biliardino.model.CreateSeasonRequest
 import com.biliardino.model.LeagueMemberResponse
@@ -46,11 +53,11 @@ import com.biliardino.model.SeasonResponse
 import com.biliardino.util.DateUtils
 import com.biliardino.viewmodel.AppViewModel
 import com.biliardino.viewmodel.UiState
-import java.time.LocalDate
 
 @Composable
 fun LeagueSeasonsScreen(league: LeagueResponse, s: UiState, vm: AppViewModel) {
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showEditLeagueDialog by remember { mutableStateOf(false) }
     var showCloseLeagueDialog by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableIntStateOf(0) }
 
@@ -85,18 +92,16 @@ fun LeagueSeasonsScreen(league: LeagueResponse, s: UiState, vm: AppViewModel) {
         ) {
             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Stagioni", fontWeight = FontWeight.Bold) })
             Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Chat", fontWeight = FontWeight.Bold) })
-            if (isAdminOrOwner) {
-                Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Membri", fontWeight = FontWeight.Bold) })
-            }
-            Tab(selected = selectedTab == (if (isAdminOrOwner) 3 else 2), onClick = { selectedTab = if (isAdminOrOwner) 3 else 2 }, text = { Text("Copertina", fontWeight = FontWeight.Bold) })
+            Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Membri", fontWeight = FontWeight.Bold) })
+            Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Copertina", fontWeight = FontWeight.Bold) })
         }
 
         Box(Modifier.weight(1f)) {
             when (selectedTab) {
                 0 -> SeasonsTab(currentLeague, s, vm)
                 1 -> LeagueChatTab(league, s, vm)
-                2 -> if (isAdminOrOwner) MembersTab(league, s, vm) else CoverTab(currentLeague, isOwner, onUpload = { launcher.launch("image/*") }, onDelete = { vm.deleteLeagueCover(league.id) })
-                3 -> if (isAdminOrOwner) CoverTab(currentLeague, isOwner, onUpload = { launcher.launch("image/*") }, onDelete = { vm.deleteLeagueCover(league.id) })
+                2 -> MembersTab(league, s, vm)
+                3 -> CoverTab(currentLeague, isOwner, onUpload = { launcher.launch("image/*") }, onDelete = { vm.deleteLeagueCover(league.id) })
             }
         }
 
@@ -107,16 +112,29 @@ fun LeagueSeasonsScreen(league: LeagueResponse, s: UiState, vm: AppViewModel) {
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (isOwner) {
+                        IconButton(
+                            onClick = { 
+                                vm.prepareEditLeague(currentLeague)
+                                showEditLeagueDialog = true 
+                            },
+                            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = "Modifica $typeName")
+                        }
+                    }
+
                     Button(
                         onClick = { showCloseLeagueDialog = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.weight(1f)
                     ) {
                         Icon(Icons.Default.Close, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Chiudi $typeName")
+                        Text("Chiudi", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
 
                     if (selectedTab == 0) {
@@ -129,6 +147,19 @@ fun LeagueSeasonsScreen(league: LeagueResponse, s: UiState, vm: AppViewModel) {
                 }
             }
         }
+    }
+
+    if (showEditLeagueDialog) {
+        EditLeagueDialog(
+            s = s,
+            vm = vm,
+            typeName = typeName,
+            onDismiss = { showEditLeagueDialog = false },
+            onConfirm = {
+                vm.updateLeague(league.id)
+                showEditLeagueDialog = false
+            }
+        )
     }
 
     if (showCreateDialog) {
@@ -235,6 +266,8 @@ fun LeagueChatTab(league: LeagueResponse, s: UiState, vm: AppViewModel) {
 
 @Composable
 fun SeasonsTab(league: LeagueResponse, s: UiState, vm: AppViewModel) {
+    val context = LocalContext.current
+    
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 16.dp),
@@ -293,6 +326,11 @@ fun SeasonsTab(league: LeagueResponse, s: UiState, vm: AppViewModel) {
             }
         }
 
+        // --- Sezione Informazioni Circolo/Lega ---
+        item {
+            ClubInfoSection(league, context)
+        }
+
         if (s.seasons.isEmpty() && !s.loading) {
             item {
                 Box(Modifier.padding(16.dp)) {
@@ -313,6 +351,138 @@ fun SeasonsTab(league: LeagueResponse, s: UiState, vm: AppViewModel) {
             }
         }
     }
+}
+
+@Composable
+fun ClubInfoSection(league: LeagueResponse, context: Context) {
+    val hasLocation = !league.address.isNullOrBlank() || (league.latitude != null && league.longitude != null)
+    
+    if (hasLocation) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f))
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.LocationOn, 
+                        contentDescription = null, 
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Informazioni Circolo",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
+                
+                if (!league.address.isNullOrBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        league.address,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                
+                Spacer(Modifier.height(16.dp))
+                
+                Button(
+                    onClick = { openNavigator(context, league.address, league.latitude, league.longitude) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                ) {
+                    Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("APRI NAVIGATORE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black)
+                }
+            }
+        }
+    }
+}
+
+private fun openNavigator(context: Context, address: String?, latitude: Double?, longitude: Double?) {
+    val uri = if (latitude != null && longitude != null) {
+        Uri.parse("geo:$latitude,$longitude?q=$latitude,$longitude")
+    } else if (!address.isNullOrBlank()) {
+        Uri.parse("geo:0,0?q=${Uri.encode(address)}")
+    } else {
+        return
+    }
+    val intent = Intent(Intent.ACTION_VIEW, uri)
+    intent.setPackage("com.google.android.apps.maps")
+    try {
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        // Fallback if Google Maps is not installed
+        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+    }
+}
+
+@Composable
+fun EditLeagueDialog(s: UiState, vm: AppViewModel, typeName: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    val isClub = s.newLeagueType == "CLUB"
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Modifica $typeName", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                OutlinedTextField(
+                    value = s.newLeagueName,
+                    onValueChange = vm::onNewLeagueNameChange,
+                    label = { Text("Nome $typeName") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large
+                )
+                
+                OutlinedTextField(
+                    value = s.newLeagueDescription,
+                    onValueChange = vm::onNewLeagueDescriptionChange,
+                    label = { Text("Descrizione") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large
+                )
+
+                if (isClub) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    Text("Localizzazione", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+
+                    OutlinedTextField(
+                        value = s.newLeagueAddress,
+                        onValueChange = vm::onNewLeagueAddressChange,
+                        label = { Text("Indirizzo") },
+                        placeholder = { Text("es: Via Roma 1, Milano") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = s.newLeagueName.isNotBlank(),
+                shape = MaterialTheme.shapes.large
+            ) { Text("Salva Modifiche") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Annulla") }
+        }
+    )
 }
 
 @Composable

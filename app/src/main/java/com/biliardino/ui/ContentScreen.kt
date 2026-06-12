@@ -79,12 +79,34 @@ fun ContentScreen(vm: AppViewModel) {
                                 is Screen.LeagueSeasons -> vm.navigateTo(Screen.MyLeagues)
                                 is Screen.SeasonCompetitions -> vm.navigateTo(Screen.LeagueSeasons(screen.league))
                                 is Screen.CreateCompetition -> vm.navigateTo(Screen.SeasonCompetitions(screen.league, screen.season))
-                                is Screen.CompetitionStatistics -> vm.navigateTo(Screen.SeasonCompetitions(screen.league, screen.season))
-                                is Screen.CompetitionMatches -> vm.navigateTo(Screen.SeasonCompetitions(screen.league, screen.season))
-                                is Screen.CompetitionParticipants -> vm.navigateTo(Screen.SeasonSettings(screen.league, screen.season, screen.competition))
+                                is Screen.CompetitionStatistics -> {
+                                    if (s.fromMyCompetitions) {
+                                        vm.navigateTo(Screen.MyLeagues)
+                                    } else {
+                                        vm.navigateTo(Screen.SeasonCompetitions(screen.league, screen.season))
+                                    }
+                                }
+                                is Screen.CompetitionMatches -> {
+                                    if (s.fromMyCompetitions) {
+                                        vm.navigateTo(Screen.MyLeagues)
+                                    } else {
+                                        vm.navigateTo(Screen.SeasonCompetitions(screen.league, screen.season))
+                                    }
+                                }
+                                is Screen.CompetitionParticipants -> {
+                                    if (s.fromMyCompetitions) {
+                                        vm.navigateTo(Screen.MyLeagues)
+                                    } else {
+                                        vm.navigateTo(Screen.SeasonSettings(screen.league, screen.season, screen.competition))
+                                    }
+                                }
                                 is Screen.SeasonTeams -> {
                                     if (screen.competition != null) {
-                                        vm.navigateTo(Screen.CompetitionStatistics(screen.league, screen.season, screen.competition))
+                                        if (s.fromMyCompetitions) {
+                                            vm.navigateTo(Screen.MyLeagues)
+                                        } else {
+                                            vm.navigateTo(Screen.CompetitionStatistics(screen.league, screen.season, screen.competition))
+                                        }
                                     } else {
                                         vm.navigateTo(Screen.SeasonCompetitions(screen.league, screen.season))
                                     }

@@ -33,6 +33,9 @@ interface LeagueApi {
     @POST("leghe")
     suspend fun createLeague(@Body request: CreateLeagueRequest): LeagueResponse
 
+    @PUT("leghe")
+    suspend fun updateLeague(@Body request: CreateLeagueRequest): LeagueResponse
+
     @POST("leghe/join")
     suspend fun joinLeague(@Body request: JoinLeagueRequest): LeagueResponse
 
@@ -50,6 +53,9 @@ interface LeagueApi {
 
     @PUT("leghe/{leagueId}/close")
     suspend fun closeLeague(@Path("leagueId") leagueId: Long): LeagueResponse
+
+    @PUT("leghe/{leagueId}")
+    suspend fun updateLeague(@Path("leagueId") leagueId: Long, @Body request: UpdateLeagueRequest): LeagueResponse
 
     @GET("leghe/{leagueId}/membri")
     suspend fun getLeagueMembers(@Path("leagueId") leagueId: Long): List<LeagueMemberResponse>
@@ -83,10 +89,10 @@ interface LeagueApi {
     @GET("stagioni/{seasonId}/trophies")
     suspend fun getTrophies(@Path("seasonId") seasonId: Long): List<TrophyResponse>
 
-    @GET("leghe/{leagueId}/comments")
+    @GET("leagues/{leagueId}/comments")
     suspend fun getLeagueComments(@Path("leagueId") leagueId: Long): List<LeagueCommentResponse>
 
-    @POST("leghe/{leagueId}/comments")
+    @POST("leagues/{leagueId}/comments")
     suspend fun addLeagueComment(@Path("leagueId") leagueId: Long, @Body request: CreateLeagueCommentRequest): LeagueCommentResponse
 }
 
@@ -99,6 +105,9 @@ interface SportApi {
 }
 
 interface CompetitionApi {
+    @GET("competitions/mine")
+    suspend fun getMyCompetitions(): List<MyCompetitionResponse>
+
     @GET("competitions/{competitionId}/players")
     suspend fun getCompetitionPlayers(@Path("competitionId") competitionId: Long): List<LeagueMemberResponse>
 

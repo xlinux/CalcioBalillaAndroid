@@ -50,14 +50,29 @@ data class LeagueResponse( // Renamed from League to match Swagger
     val officialClub: Boolean = false,
     val inviteCode: String? = null,
     val coverImageUrl: String? = null,
-    val status: String? = null
+    val status: String? = null,
+    val address: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null
 )
 
 @Serializable
 data class CreateLeagueRequest(
     val name: String,
     val description: String,
-    val leagueType: String = "PRIVATE_LEAGUE"
+    val leagueType: String = "PRIVATE_LEAGUE",
+    val address: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null
+)
+
+@Serializable
+data class UpdateLeagueRequest(
+    val name: String,
+    val description: String,
+    val address: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null
 )
 
 @Serializable
@@ -145,6 +160,22 @@ data class CompetitionResponse(
     val winnerUserId: Long? = null,
     val closedAt: String? = null,
     val phase: String? = null // SETUP,GROUP_STAGE,     READY_FOR_FINAL_STAGE, ,FINAL_STAGE,  COMPLETED
+)
+
+@Serializable
+data class MyCompetitionResponse(
+    val id: Long,
+    val name: String,
+    val type: String,
+    val phase: String? = null,
+    val rankingMode: String,
+    val active: Boolean,
+    val leagueId: Long,
+    val leagueName: String,
+    val seasonId: Long,
+    val seasonName: String,
+    val sportId: Long,
+    val sportName: String
 )
 
 @Serializable
