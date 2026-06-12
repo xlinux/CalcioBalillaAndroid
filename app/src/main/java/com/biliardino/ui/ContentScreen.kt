@@ -52,7 +52,7 @@ fun ContentScreen(vm: AppViewModel) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            if (s.currentScreen !is Screen.Splash && s.currentScreen !is Screen.Onboarding) {
+            if (s.currentScreen !is Screen.Splash && s.currentScreen !is Screen.Onboarding && s.currentScreen !is Screen.MyLeagues) {
                 TopAppBar(
                     title = {
                         if (s.currentUser != null || (s.currentScreen !is Screen.PublicLeagues && s.currentScreen !is Screen.AuthMenu)) {
@@ -71,7 +71,7 @@ fun ContentScreen(vm: AppViewModel) {
                         }
                     },
                 navigationIcon = {
-                    if (s.currentScreen !is Screen.PublicLeagues && s.currentScreen !is Screen.MyLeagues) {
+                    if (s.currentScreen !is Screen.PublicLeagues) {
                         IconButton(onClick = { 
                             when (val screen = s.currentScreen) {
                                 is Screen.AuthMenu -> vm.navigateTo(Screen.PublicLeagues)

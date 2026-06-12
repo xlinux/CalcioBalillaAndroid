@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -44,6 +45,7 @@ data class UiState(
     val competitionTemplates: List<CompetitionTemplateResponse> = emptyList(),
     val currentCompetition: CompetitionResponse? = null,
     val myCompetitions: List<MyCompetitionResponse> = emptyList(),
+    val myUpcomingMatches: List<MatchResponse> = emptyList(),
     val playerRankings: List<PlayerRankingResponse> = emptyList(),
     val teamRankings: List<TeamRankingResponse> = emptyList(),
     val competitionPlayers: List<LeagueMemberResponse> = emptyList(),
@@ -346,6 +348,26 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 .onFailure { Log.e("AppViewModel", "Failed to load my competitions", it) }
         }
+    }
+
+    fun loadMyUpcomingMatches() = viewModelScope.launch {
+        runCatching { ApiClientBase.matches.getMyUpcomingMatches() }
+            .onSuccess { 
+                _state.value = _state.value.copy(myUpcomingMatches = it) 
+            }
+            .onFailure { Log.e("AppViewModel", "Failed to load upcoming matches", it) }
+    }
+
+    fun loadDashboardData() = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        
+        val jobs = listOf(
+            launch { loadPublicLeagues() },
+            launch { loadMyLeagues() },
+            launch { loadMyUpcomingMatches() }
+        )
+        jobs.joinAll()
+        _state.value = _state.value.copy(loading = false)
     }
 
     fun createLeague() = viewModelScope.launch {

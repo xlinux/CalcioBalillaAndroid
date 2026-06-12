@@ -344,6 +344,8 @@ data class MatchResponse( // Renamed from Match
     val teamAName: String? = null,
     val teamBId: Long? = null,
     val teamBName: String? = null,
+    val competitionName: String? = null,
+    val leagueName: String? = null,
     val scoreA: Int? = null,
     val scoreB: Int? = null,
     val playedAt: String? = null,

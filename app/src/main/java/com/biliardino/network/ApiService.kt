@@ -234,6 +234,9 @@ interface CompetitionApi {
 }
 
 interface MatchApi {
+    @GET("matches/mine/upcoming")
+    suspend fun getMyUpcomingMatches(): List<MatchResponse>
+
     @POST("stagioni/{seasonId}/partite/random")
     suspend fun generateRandomMatches(@Path("seasonId") seasonId: Long, @Body request: GenerateRandomMatchesRequest): List<MatchResponse>
 
